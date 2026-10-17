@@ -1,0 +1,10 @@
+Copyright (c) 2026 Pablo Díez Martínez — Aero Cycling Project.
+Todos los derechos reservados.
+
+Este código se publica únicamente para alojar la herramienta. No se concede ninguna
+licencia de uso, copia, modificación ni distribución sin autorización expresa y por
+escrito del titular.
+
+Este repositorio contiene solo la aplicación: no incluye datos de ningún ciclista.
+Las librerías incluidas (SheetJS, html2pdf.js, jsPDF, html2canvas) mantienen sus
+propias licencias de código abierto.
