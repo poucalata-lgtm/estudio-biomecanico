@@ -1199,22 +1199,21 @@ function openSettings(){
 function closeModal(){$$('.modal').forEach(m=>m.classList.remove('on'));}
 
 /* ====================================================================
-   GOOGLE DRIVE (carpeta compartida)
+   GOOGLE DRIVE (carpeta compartida) — permiso limitado drive.file
+   La herramienta solo accede a lo que ella crea o a lo que el usuario
+   elige en el selector de Google (Picker).
    ==================================================================== */
-const GCONF={clientId:'625946283639-c0341b970nfhdg8kuh3aactkfkl2rpr6.apps.googleusercontent.com', scope:'https://www.googleapis.com/auth/drive.file'};
+const GCONF={clientId:'625946283639-c0341b970nfhdg8kuh3aactkfkl2rpr6.apps.googleusercontent.com', apiKey:'AIzaSyDZmCArmDsSYUp21tc39lUGqb2pQMpk6RA', appId:'625946283639', scope:'https://www.googleapis.com/auth/drive.file'};
 const XL_NAME='BBDD_estudios_biomecanicos.xlsx';
+const MIME_JSON='application/json', MIME_XLSX='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', MIME_DIR='application/vnd.google-apps.folder';
 const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`))return res();const s=document.createElement('script');s.src=src;s.async=true;s.onload=()=>res();s.onerror=()=>rej(new Error('No se pudo cargar '+src.split('/')[2]+' (¿sin conexión?)'));document.head.appendChild(s);});}
 const GD={
-  token:null, exp:0, user:null, root:null, rootName:'', sub:{}, setId:null, files:[], busy:false,
+  token:null, exp:0, user:null, root:null, rootName:'', setId:null, files:[],
   get available(){return /^https?:$/.test(location.protocol)&&GCONF.clientId&&!GCONF.clientId.startsWith('__');},
   get ok(){return !!(this.token&&this.root);},
-  loadGIS(){return new Promise((res,rej)=>{
-    if(window.google&&google.accounts&&google.accounts.oauth2) return res();
-    const s=document.createElement('script'); s.src='https://accounts.google.com/gsi/client'; s.async=true;
-    s.onload=()=>res(); s.onerror=()=>rej(new Error('No se pudo cargar el inicio de sesión de Google (¿sin conexión?)'));
-    document.head.appendChild(s);});},
   async signIn(){
-    await this.loadGIS();
+    await loadScript('https://accounts.google.com/gsi/client');
     await new Promise((res,rej)=>{
       const tc=google.accounts.oauth2.initTokenClient({client_id:GCONF.clientId,scope:GCONF.scope,
         callback:r=>{if(r.error) return rej(new Error(r.error_description||r.error)); this.token=r.access_token; this.exp=Date.now()+((+r.expires_in||3600)-120)*1000; res();},
@@ -1223,10 +1222,11 @@ const GD={
     });
     const a=await this.api('about?fields=user(displayName,emailAddress)'); this.user=a.user; LS.set('gd_email',a.user.emailAddress);
   },
-  signOut(){ if(this.token&&window.google&&google.accounts.oauth2.revoke) try{google.accounts.oauth2.revoke(this.token,()=>{});}catch(e){}
+  signOut(){ if(this.token&&window.google&&google.accounts&&google.accounts.oauth2.revoke) try{google.accounts.oauth2.revoke(this.token,()=>{});}catch(e){}
     this.token=null; this.user=null; this.files=[]; },
+  async ensureToken(){ if(!this.token||Date.now()>this.exp) await this.signIn(); },
   async api(path,opt={},raw){
-    if(!this.token||Date.now()>this.exp) await this.signIn();
+    await this.ensureToken();
     const url=path.startsWith('http')?path:'https://www.googleapis.com/drive/v3/'+path;
     const go=()=>fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+this.token}});
     let r=await go();
@@ -1242,14 +1242,8 @@ const GD={
        out=out.concat(j.files||[]); pt=j.nextPageToken;}while(pt);
     return out;
   },
-  async mkdir(name,parent){return this.api('files?fields=id,name&supportsAllDrives=true',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(parent?{name,mimeType:'application/vnd.google-apps.folder',parents:[parent]}:{name,mimeType:'application/vnd.google-apps.folder'})});},
-  async ensureSub(name){
-    if(this.sub[name]) return this.sub[name];
-    const f=await this.list(`'${this.root}' in parents and name='${this.esc(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,'files(id)');
-    this.sub[name]=f.length?f[0].id:(await this.mkdir(name,this.root)).id; return this.sub[name];
-  },
-  async findFile(name,parent){const f=await this.list(`'${parent}' in parents and name='${this.esc(name)}' and trashed=false`); return f[0]||null;},
+  async mkdir(name){return this.api('files?fields=id,name&supportsAllDrives=true',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:MIME_DIR})});},
+  async findFile(name){const f=await this.list(`'${this.root}' in parents and name='${this.esc(name)}' and trashed=false`); return f[0]||null;},
   async upload(meta,blob,fileId){
     const b='aecy'+Math.random().toString(36).slice(2);
     const head=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${blob.type||'application/octet-stream'}\r\n\r\n`;
@@ -1259,34 +1253,60 @@ const GD={
   },
   async download(id,as){const r=await this.api(`files/${id}?alt=media&supportsAllDrives=true`,{},true); return as==='blob'?r.blob():as==='buf'?r.arrayBuffer():r.json();},
   async meta(id){return this.api(`files/${id}?fields=id,name,mimeType,modifiedTime,version,trashed,lastModifyingUser(displayName,emailAddress)&supportsAllDrives=true`);},
-  async share(email){return this.api(`files/${this.root}/permissions?sendNotificationEmail=true&supportsAllDrives=true`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'user',role:'writer',emailAddress:email})});},
+  async share(email){return this.api(`files/${this.root}/permissions?sendNotificationEmail=false&supportsAllDrives=true`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'user',role:'writer',emailAddress:email})});},
+  /* Selector de Google: lo que el usuario elige aquí es lo único (además de lo que crea) a lo que la herramienta puede acceder */
+  async pick({folders=false,multi=false,title=''}={}){
+    await this.ensureToken();
+    await loadScript('https://apis.google.com/js/api.js');
+    await new Promise(r=>gapi.load('picker',{callback:r}));
+    return new Promise(res=>{
+      const P=google.picker;
+      const b=new P.PickerBuilder().setOAuthToken(this.token).setDeveloperKey(GCONF.apiKey).setAppId(GCONF.appId).setLocale('es')
+        .setOrigin(location.protocol+'//'+location.host).setTitle(title)
+        .setCallback(d=>{const a=d[P.Response.ACTION]||d.action; if(a===P.Action.PICKED) res(d[P.Response.DOCUMENTS]||d.docs||[]); else if(a===P.Action.CANCEL) res([]);});
+      if(folders){
+        b.addView(new P.DocsView(P.ViewId.FOLDERS).setOwnedByMe(false).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(MIME_DIR).setLabel('Compartido conmigo'));
+        b.addView(new P.DocsView(P.ViewId.FOLDERS).setOwnedByMe(true).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(MIME_DIR).setLabel('Mi unidad'));
+      } else {
+        b.addView(new P.DocsView(P.ViewId.DOCS).setParent(this.root).setIncludeFolders(false).setMode(P.DocsViewMode.LIST).setMimeTypes(MIME_JSON+','+MIME_XLSX));
+      }
+      if(multi) b.enableFeature(P.Feature.MULTISELECT_ENABLED);
+      b.build().setVisible(true);
+    });
+  },
 };
 const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b);});
-function parseFolderId(s){s=(s||'').trim();const m=s.match(/folders\/([A-Za-z0-9_-]{10,})/)||s.match(/[?&]id=([A-Za-z0-9_-]{10,})/)||s.match(/^([A-Za-z0-9_-]{10,})$/);return m?m[1]:null;}
 const whoName=u=>u?(u.displayName||u.emailAddress||''):'';
 
 /* ---------- conexión y carpeta ---------- */
 async function driveConnect(){
   try{ await GD.signIn(); }catch(e){ toast(e.message,1); return renderDrive(); }
-  const saved=LS.get('gd_root'), urlId=parseFolderId(new URLSearchParams(location.search).get('carpeta')||'');
-  const id=urlId||saved;
-  if(id){ try{ await driveUseFolder(id,true); }catch(e){ toast('No se puede acceder a la carpeta guardada: '+e.message,1); GD.root=null; } }
+  const saved=LS.get('gd_root');
+  if(saved){ try{ await driveUseFolder(saved,true); }catch(e){ GD.root=null; LS.set('gd_root',null); } }
   renderDrive(); updateDriveBadge();
 }
 async function driveUseFolder(id,silent){
   const m=await GD.meta(id);
-  if(m.mimeType!=='application/vnd.google-apps.folder') throw new Error('Ese enlace no es de una carpeta');
+  if(m.mimeType!==MIME_DIR) throw new Error('Lo elegido no es una carpeta');
   if(m.trashed) throw new Error('La carpeta está en la papelera');
-  GD.root=id; GD.rootName=m.name; GD.sub={}; GD.setId=null; LS.set('gd_root',id);
+  GD.root=id; GD.rootName=m.name; GD.setId=null; LS.set('gd_root',id);
   await driveLoadSettings();
   await driveRefreshList();
   if(!silent) toast('Conectado a la carpeta “'+m.name+'”');
 }
+async function driveChooseFolder(){
+  try{
+    const docs=await GD.pick({folders:true,title:'Elige la carpeta compartida de estudios'});
+    if(!docs.length) return;
+    await driveUseFolder(docs[0].id);
+    if(!GD.files.length) toast('Carpeta conectada. Si tu compañero ya tiene estudios guardados, pulsa “Traer estudios de la carpeta”.');
+  }catch(e){toast('No se pudo conectar la carpeta: '+e.message,1);}
+  renderDrive(); updateDriveBadge();
+}
 async function driveCreateFolder(){
   const name=($('#gd-newname')&&$('#gd-newname').value.trim())||'Estudios biomecánicos';
   try{
-    const f=await GD.mkdir(name); GD.root=f.id; GD.sub={};
-    await GD.ensureSub('Casos'); await GD.ensureSub('Imagenes');
+    const f=await GD.mkdir(name); GD.root=f.id;
     await driveSaveSettings();
     await driveUseFolder(f.id,true);
     toast('Carpeta creada en tu Drive. Compártela con tu compañero desde aquí.');
@@ -1295,21 +1315,31 @@ async function driveCreateFolder(){
 }
 async function driveLoadSettings(){
   try{
-    const f=await GD.findFile('ajustes.json',GD.root);
+    const f=await GD.findFile('ajustes.json');
     if(f){ const s=await GD.download(f.id,'json'); const lm=SETTINGS.last_mode; SETTINGS={...SETTINGS_DEF,...s,last_mode:lm}; GD.setId=f.id; await DB.put('kv',SETTINGS,'settings'); buildTecList(); }
   }catch(e){console.warn('ajustes',e);}
 }
 async function driveSaveSettings(){
   const {last_mode,...s}=SETTINGS;
-  const blob=new Blob([JSON.stringify(s)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify(s)],{type:MIME_JSON});
+  if(!GD.setId){const f=await GD.findFile('ajustes.json'); if(f) GD.setId=f.id;}
   const f=await GD.upload(GD.setId?{name:'ajustes.json'}:{name:'ajustes.json',parents:[GD.root]},blob,GD.setId); GD.setId=f.id;
+}
+/* Traer (dar acceso a) los estudios que ha guardado otra persona */
+async function driveBringFiles(){
+  try{
+    const docs=await GD.pick({multi:true,title:'Selecciona los estudios a traer (puedes marcarlos todos)'});
+    if(!docs.length) return;
+    if(docs.some(d=>d.name==='ajustes.json')) await driveLoadSettings();
+    await driveRefreshList();
+    toast(`${docs.length} archivo(s) disponibles en la herramienta`);
+  }catch(e){toast('Error con el selector de Google: '+e.message,1);}
 }
 
 /* ---------- casos ---------- */
 async function driveRefreshList(){
   if(!GD.ok) return;
-  const casos=await GD.ensureSub('Casos');
-  GD.files=await GD.list(`'${casos}' in parents and trashed=false and mimeType='application/json'`);
+  GD.files=(await GD.list(`'${GD.root}' in parents and trashed=false and mimeType='${MIME_JSON}'`)).filter(f=>f.name!=='ajustes.json');
   renderDriveList();
 }
 function caseProps(c){
@@ -1317,29 +1347,18 @@ function caseProps(c){
   return {cid:c.id,nombre:cut(c.v.nombre,40),fecha:cut(c.v.fecha,10),tecnico:cut(c.v.tecnico,30),seg:c.v.seg_fecha?'1':'0',modo:c.v.modo||'full'};
 }
 async function driveSaveCase(c){
-  const casos=await GD.ensureSub('Casos'), imgF=await GD.ensureSub('Imagenes');
-  // 1) ¿existe ya en Drive? (y control de versiones)
   let target=null;
   if(c._drive&&c._drive.id){ try{const m=await GD.meta(c._drive.id); if(!m.trashed) target=m;}catch(e){} }
-  if(!target){ const ex=(await GD.list(`'${casos}' in parents and trashed=false and name contains '${GD.esc(c.id)}'`))[0]; if(ex){target=ex; if(!c._drive) c._drive={id:ex.id,version:null};} }
+  if(!target){ const ex=(await GD.list(`'${GD.root}' in parents and trashed=false and name contains '${GD.esc(c.id)}'`))[0]; if(ex){target=ex; if(!c._drive) c._drive={id:ex.id,version:null};} }
   if(target&&c._drive&&c._drive.version&&target.version!==c._drive.version){
     const who=whoName(target.lastModifyingUser)||'Otra persona';
     if(!confirm(`${who} modificó este estudio en Drive (${new Date(target.modifiedTime).toLocaleString('es-ES')}) después de que tú lo abrieras.\n\nSi guardas ahora, sus cambios se perderán. ¿Guardar igualmente?\n\n(Cancelar = no guardar en Drive; puedes abrir su versión desde “Casos y Excel”)`)) return false;
   } else if(target&&c._drive&&!c._drive.version&&!confirm('Ya existe en Drive un estudio con este código. ¿Sustituirlo por esta versión?')) return false;
-  // 2) imágenes nuevas
-  for(const im of c.imgs||[]){
-    if(im.src&&!im.did){
-      const blob=await (await fetch(im.src)).blob();
-      const f=await GD.upload({name:`${c.id}_${String(im.cap||'imagen').replace(/[^\wÀ-ÿ-]+/g,'_')}.jpg`,parents:[imgF]},blob);
-      im.did=f.id;
-    }
-  }
-  // 3) json del caso (sin las imágenes incrustadas)
   const {_drive,...rest}=c;
-  const copy={...rest,imgs:(c.imgs||[]).map(({src,...r})=>r),guardado_por:GD.user&&GD.user.emailAddress};
-  const blob=new Blob([JSON.stringify(copy)],{type:'application/json'});
+  const copy={...rest,imgs:(c.imgs||[]).map(({did,...r})=>r),guardado_por:GD.user&&GD.user.emailAddress};
+  const blob=new Blob([JSON.stringify(copy)],{type:MIME_JSON});
   const meta={name:`${c.id} - ${c.v.nombre||'sin nombre'}.json`,appProperties:caseProps(c)};
-  const f=target?await GD.upload(meta,blob,target.id):await GD.upload({...meta,parents:[casos]},blob);
+  const f=target?await GD.upload(meta,blob,target.id):await GD.upload({...meta,parents:[GD.root]},blob);
   c._drive={id:f.id,version:f.version,modifiedTime:f.modifiedTime};
   await DB.put('cases',c);
   const i=GD.files.findIndex(x=>x.id===f.id); if(i>=0) GD.files[i]=f; else GD.files.push(f);
@@ -1361,15 +1380,14 @@ async function driveOpenCase(fileId){
   }catch(e){toast('No se pudo abrir: '+e.message,1);}
 }
 async function driveBuildExcel(){
-  const casos=await GD.ensureSub('Casos');
-  const files=await GD.list(`'${casos}' in parents and trashed=false and mimeType='application/json'`,'files(id)');
+  const files=(await GD.list(`'${GD.root}' in parents and trashed=false and mimeType='${MIME_JSON}'`,'files(id,name)')).filter(f=>f.name!=='ajustes.json');
   const cases=[];
   for(const f of files){ try{const c=await GD.download(f.id,'json'); if(c&&c.id&&c.v) cases.push(c);}catch(e){} }
   const ok=cases.filter(c=>c.v.consent);
   const {wb,n}=mergeWorkbook(null,ok);
   const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'});
-  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const ex=await GD.findFile(XL_NAME,GD.root);
+  const blob=new Blob([buf],{type:MIME_XLSX});
+  const ex=await GD.findFile(XL_NAME);
   await GD.upload(ex?{name:XL_NAME}:{name:XL_NAME,parents:[GD.root]},blob,ex&&ex.id);
   return {n,total:cases.length,skipped:cases.length-ok.length};
 }
@@ -1390,42 +1408,44 @@ function renderDrive(){
     el.innerHTML=`<p class="note" style="margin:0">La carpeta compartida de Google Drive funciona en la <b>versión web</b> de la herramienta (el enlace). En este archivo local los casos se guardan solo en este navegador.</p>`; return;
   }
   if(!GD.token){
-    el.innerHTML=`<p class="note">Inicia sesión con tu cuenta de Google para ver y guardar los estudios en la carpeta compartida.</p>
+    el.innerHTML=`<p class="note">Inicia sesión con tu cuenta de Google para ver y guardar los estudios en la carpeta compartida. La herramienta solo podrá acceder a la carpeta y a los archivos que tú elijas.</p>
       <button class="btn pri" id="gd-login">Iniciar sesión con Google</button>`;
     $('#gd-login').onclick=driveConnect; return;
   }
   const who=`Conectado como <b>${esc(whoName(GD.user))}</b> (${esc(GD.user.emailAddress)}) · <a href="#" id="gd-logout">cerrar sesión</a>`;
   if(!GD.root){
-    const pre=new URLSearchParams(location.search).get('carpeta')||'';
     el.innerHTML=`<p class="dbstate" style="margin:0 0 12px">${who}</p>
       <div class="grid" style="grid-template-columns:1fr 1fr">
-        <div class="f"><label>¿Te han compartido la carpeta? Pega aquí su enlace de Drive</label>
-          <div style="display:flex;gap:6px"><input type="text" id="gd-link" value="${esc(pre)}" placeholder="https://drive.google.com/drive/folders/…" style="flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 9px"><button class="btn pri" id="gd-use">Usar</button></div></div>
+        <div class="f"><label>¿Te han compartido la carpeta de estudios?</label>
+          <button class="btn pri" id="gd-choose">Elegir la carpeta compartida…</button>
+          <small style="color:var(--muted)">Se abre el selector de Google: búscala en “Compartido conmigo”, márcala y pulsa Seleccionar.</small></div>
         <div class="f"><label>¿Primera vez? Crea la carpeta en tu Drive</label>
           <div style="display:flex;gap:6px"><input type="text" id="gd-newname" value="Estudios biomecánicos" style="flex:1;border:1px solid var(--line);border-radius:7px;padding:7px 9px"><button class="btn" id="gd-create">Crear carpeta</button></div></div>
       </div>`;
-    $('#gd-use').onclick=async()=>{const id=parseFolderId($('#gd-link').value);if(!id)return toast('Enlace de carpeta no válido',1);
-      try{await driveUseFolder(id);}catch(e){toast((e.status===404?'Tu cuenta no puede abrir esa carpeta desde la herramienta. ':'')+e.message,1);} renderDrive(); updateDriveBadge();};
+    $('#gd-choose').onclick=driveChooseFolder;
     $('#gd-create').onclick=driveCreateFolder;
     $('#gd-logout').onclick=e=>{e.preventDefault();GD.signOut();renderDrive();updateDriveBadge();};
     return;
   }
   el.innerHTML=`<p class="dbstate" style="margin:0 0 10px">${who}<br>Carpeta: <a href="https://drive.google.com/drive/folders/${GD.root}" target="_blank" rel="noopener"><b>${esc(GD.rootName)}</b></a> · <a href="#" id="gd-change">cambiar de carpeta</a></p>
     <div class="row">
-      <button class="btn" id="gd-refresh">↻ Actualizar lista</button>
+      <button class="btn pri" id="gd-bring" title="Abre el selector de Google para dar acceso a los estudios que ha guardado tu compañero">＋ Traer estudios de la carpeta</button>
+      <button class="btn" id="gd-refresh">↻ Actualizar</button>
       <button class="btn xl" id="gd-excel">Generar Excel en Drive</button>
       <span style="flex:1"></span>
       <input type="email" id="gd-share-mail" placeholder="email de Google del compañero" style="border:1px solid var(--line);border-radius:7px;padding:6px 9px;min-width:220px">
       <button class="btn" id="gd-share">Compartir carpeta</button>
-    </div>`;
+    </div>
+    <p class="note" style="margin:10px 0 0">Por seguridad, la herramienta solo ve los estudios que has guardado tú o que has traído con <b>＋ Traer estudios</b>. Cuando tu compañero guarde estudios nuevos, tráelos una vez con ese botón (en el selector puedes marcarlos todos). Para el Excel conjunto, trae antes todos los estudios.</p>`;
   $('#gd-logout').onclick=e=>{e.preventDefault();GD.signOut();renderDrive();updateDriveBadge();renderDriveList();};
   $('#gd-change').onclick=e=>{e.preventDefault();GD.root=null;LS.set('gd_root',null);renderDrive();updateDriveBadge();renderDriveList();};
+  $('#gd-bring').onclick=driveBringFiles;
   $('#gd-refresh').onclick=async()=>{try{await driveRefreshList();toast('Lista actualizada');}catch(e){toast(e.message,1);}};
   $('#gd-excel').onclick=async()=>{const b=$('#gd-excel');b.disabled=true;b.textContent='Generando…';
     try{const r=await driveBuildExcel();toast(`Excel actualizado en Drive: ${r.n} estudio(s)${r.skipped?` · ${r.skipped} sin consentimiento no incluidos`:''}`);}catch(e){toast('Error al generar el Excel: '+e.message,1);}
     b.disabled=false;b.textContent='Generar Excel en Drive';};
   $('#gd-share').onclick=async()=>{const m=$('#gd-share-mail').value.trim(); if(!/^\S+@\S+\.\S+$/.test(m)) return toast('Escribe un email válido',1);
-    try{await GD.share(m);toast('Carpeta compartida con '+m+'. Le llegará un email de Google.');$('#gd-share-mail').value='';}catch(e){toast('No se pudo compartir: '+e.message,1);}};
+    try{await GD.share(m);toast('Carpeta compartida con '+m+'. Pásale el enlace de la herramienta.');$('#gd-share-mail').value='';}catch(e){toast('No se pudo compartir: '+e.message,1);}};
 }
 function renderDriveList(){
   const t=$('#dlist'); if(!t) return;
@@ -1441,8 +1461,8 @@ function renderDriveList(){
       <td>${esc(r.p.tecnico||'')}</td>
       <td>${r.p.seg==='1'?'<span class="pill ok">hecho</span>':'<span class="pill w">pendiente</span>'}</td>
       <td><small>${new Date(r.f.modifiedTime).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}<br>${esc(whoName(r.f.lastModifyingUser))}</small></td>
-      <td style="text-align:right"><button class="btn sm pri" data-dopen="${r.f.id}">Abrir</button></td></tr>`).join('')
-    ||'<tr><td colspan="6" style="color:var(--muted)">Todavía no hay estudios en la carpeta.</td></tr>'}</tbody>`;
+      <td style="text-align:right"><button class="btn sm pri">Abrir</button></td></tr>`).join('')
+    ||'<tr><td colspan="6" style="color:var(--muted)">No hay estudios visibles todavía. Si tu compañero ya ha guardado alguno, pulsa “＋ Traer estudios de la carpeta”.</td></tr>'}</tbody>`;
   $$('#dlist [data-drow]').forEach(tr=>tr.onclick=()=>driveOpenCase(tr.dataset.drow));
 }
 
