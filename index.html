@@ -171,6 +171,8 @@ table.r-t td small{color:#777;font-size:7.6pt;display:block}
 .r-imgs{display:flex;flex-direction:column;gap:2mm}
 .r-img{break-inside:avoid;page-break-inside:avoid}
 .r-img img{display:block;margin:1.5mm auto 0;max-width:100%;max-height:105mm}
+.r-pair{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:4mm;break-inside:avoid;page-break-inside:avoid}
+.r-pair .r-img img{max-height:100mm}
 .r-foot{text-align:center;color:#777;font-size:8pt;margin-top:6mm;text-transform:uppercase;letter-spacing:.06em}
 .r-ref{color:#aaa;font-size:7.5pt;text-align:right;margin-top:3mm}
 .pb{break-before:page;page-break-before:always}
@@ -389,6 +391,8 @@ const SECTIONS=[
  ]},
  {id:'bici',title:'Bicicleta',fields:[
   {k:'bici_tipo',l:'Tipo',t:'select',x:1,o:[['CAR','Carretera'],['GRA','Gravel'],['MTB','MTB'],['TRI','Triatlón / CRI'],['URB','Urbana / e-bike'],['OTR','Otra']]},
+  {k:'bici_num',l:'Nº de bici de este ciclista',t:'num',x:0,h:'1 = la primera bici que nos trae; 2 = la segunda; 3 = la tercera…'},
+  {k:'cod_inf',l:'Código del informe (calculado)',t:'calc',x:0,w:2,h:'BIO + iniciales + tipo de bici + nº de bici. Sustituye al nombre en el informe y en el PDF'},
   {k:'bici_marca',l:'Marca',t:'text',x:0},
   {k:'bici_modelo',l:'Modelo',t:'text',x:0},
   {k:'bici_talla',l:'Talla',t:'text',x:0},
@@ -473,6 +477,9 @@ const SECTIONS=[
   {k:'dismetria_cm',l:'Dismetría',t:'num',u:'cm',x:1},
   {k:'vf_txt',l:'Otras observaciones funcionales',t:'textarea',x:1,w:3},
  ]},
+ {id:'cons',title:'Consentimiento',fields:[
+  {k:'consent',l:'El/la ciclista consiente el uso de sus datos, de forma anonimizada, con fines de investigación',t:'check',x:0,w:3},
+ ]},
  {id:'capini',title:'Capturas iniciales',custom:'capini'},
  {id:'hip',title:'Hipótesis biomecánica',fields:[
   {k:'hip',l:'Hallazgos — para análisis',t:'multi',x:1,w:3,o:[['SBAJO','Sillín bajo'],['SALTO','Sillín alto'],['SADEL','Sillín adelantado'],['SRET','Sillín retrasado'],['SINC','Inclinación de sillín'],['ALARGO','Alcance largo'],['ACORTO','Alcance corto'],['DROPX','Drop excesivo'],['DROPC','Drop insuficiente'],['ALIN','Alineación rodilla-pie'],['CALA','Rotación / posición de cala'],['ASIM','Asimetría funcional'],['MOVL','Limitación de movilidad'],['PRES','Presión en zona de apoyo']]},
@@ -497,13 +504,17 @@ const SECTIONS=[
   {k:'seg_reajuste',l:'¿Necesitó reajuste?',t:'yn',x:1},
   {k:'seg_txt',l:'Notas del seguimiento',t:'textarea',x:1,w:3},
  ]},
- {id:'cons',title:'Consentimiento',fields:[
-  {k:'consent',l:'El/la ciclista consiente el uso de sus datos, de forma anonimizada, con fines de investigación',t:'check',x:0,w:3},
- ]},
 ];
 const cm=x=>{const n=num(x);return n!==null&&n>0&&n<3?n*100:n;};
 const r1=x=>x===null||!isFinite(x)?null:Math.round(x*10)/10;
+// Código anonimizado del informe: BIO + iniciales (nombre, 2º nombre si lo hay, apellidos) + tipo de bici + nº de bici. Ej.: Pablo Díez Martínez, carretera, 1ª bici → BIOPDMC1
+const BICI_LET={CAR:'C',GRA:'G',TRI:'TT',MTB:'M',URB:'U',OTR:'O'};
+const NAME_PART=new Set(['de','del','la','las','los','y','i','e','da','das','do','dos','di','van','von','der','den','le','du']);
+function iniciales(n){return (n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(w=>w&&!NAME_PART.has(w.toLowerCase()))
+  .map(w=>(w.match(/[A-Za-z]/)||[''])[0].toUpperCase()).join('');}
+function bioCode(v){const ini=iniciales(v.nombre);if(!ini)return '';const n=Math.round(num(v.bici_num)||1);return 'BIO'+ini+(BICI_LET[v.bici_tipo]||'')+(n>0?n:1);}
 const CALCS={
+  cod_inf:v=>bioCode(v)||null,
   wkg_20min:v=>{const w=num(v.w_20min),p=num(v.peso);return w!==null&&p?Math.round(w/p*100)/100:null;},
   wkg_rodaje:v=>{const w=num(v.w_rodaje),p=num(v.peso);return w!==null&&p?Math.round(w/p*100)/100:null;},
   edad:v=>{if(v.fecha_nac&&v.fecha){const n=new Date(v.fecha_nac+'T12:00'),f=new Date(v.fecha+'T12:00');if(isNaN(n)||isNaN(f))return null;
@@ -522,12 +533,13 @@ const FIELDS={};
 const MODE=()=>(CUR&&CUR.v&&CUR.v.modo)||'full';
 const SIMPLE_SECTIONS=[
  {id:'cli',title:'Ciclista',priv:true,note:'Nombre, teléfono, email y fecha de nacimiento aparecen en el informe pero NUNCA se exportan al Excel.',fields:['nombre','fecha','telefono','email','fecha_nac','edad','sexo','tecnico']},
- {id:'bici',title:'Bicicleta',fields:['bici_tipo','bici_marca','bici_modelo','bici_talla','bici_anio']},
+ {id:'bici',title:'Bicicleta',fields:['bici_tipo','bici_num','cod_inf','bici_marca','bici_modelo','bici_talla','bici_anio']},
  {id:'mot',title:'Motivo principal de visita',fields:[{k:'motivo_txt',l:'Motivo principal',t:'textarea',w:3}]},
  {id:'hab',title:'Hábitos y práctica del ciclismo',fields:['horas_sem','fuerza','movilidad','trabajo_fis']},
  {id:'hc',title:'Historia clínica',fields:['sistemicas','sistemicas_txt',{k:'me_txt',l:'Trastornos músculo-esqueléticos',t:'textarea',w:3},'hc_otras']},
  {id:'mol',title:'Molestias habituales',fields:[{k:'mol_bici_txt',l:'Sobre la bicicleta',t:'textarea',w:3},{k:'mol_dia_txt',l:'En tu vida diaria',t:'textarea',w:3}]},
  {id:'vf',title:'Valoración funcional',fields:[{k:'dfx_txt',l:'Movilidad de tobillos',t:'text',w:3},{k:'sup_txt',l:'Sentadilla unipodal',t:'text',w:3},{k:'sp_txt',l:'Sentadilla profunda',t:'text',w:3},{k:'hombro_txt',l:'Movilidad de hombro',t:'text',w:3},{k:'isq_txt',l:'Flexibilidad isquiosural',t:'text',w:3},{k:'thomas_txt',l:'Test de Thomas',t:'text',w:3}]},
+ {id:'cons',title:'Consentimiento',fields:['consent']},
  {id:'medpre',title:'Medidas pre-estudio',fields:[{k:'m_sil_alt_pre',l:'Altura de sillín',t:'num',u:'cm',h:'Desde el centro del eje del pedalier hasta la parte superior del sillín en el ancho de 80 mm'},{k:'m_alc_pre',l:'Alcance',t:'num',u:'cm',h:'Desde el ancho de 80 mm del sillín o su centro hasta el centro del tornillo de la dirección'}]},
  {id:'capini',title:'Capturas iniciales',custom:'imgs_ini'},
  {id:'hip',title:'Hipótesis biomecánica',fields:[{k:'hip_txt',l:'Hipótesis biomecánica',t:'textarea',w:3,rows:6}]},
@@ -535,7 +547,6 @@ const SIMPLE_SECTIONS=[
  {id:'capfin',title:'Capturas pos',custom:'imgs_fin'},
  {id:'medpost',title:'Medidas finales',fields:[{k:'m_sil_alt_post',l:'Altura de sillín',t:'num',u:'cm',h:'Desde el centro del eje del pedalier hasta la parte superior del sillín en el ancho de 80 mm'},{k:'m_alc_post',l:'Alcance',t:'num',u:'cm',h:'Desde el ancho de 80 mm del sillín o su centro hasta el centro del tornillo de la dirección'}]},
  {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
- {id:'cons',title:'Consentimiento',fields:['consent']},
 ]; SECTIONS.forEach(s=>(s.fields||[]).forEach(f=>FIELDS[f.k]=f));
 
 /* ====================================================================
@@ -759,7 +770,7 @@ function antroWarn(){
 function refreshCalc(){
   $$('#form [data-dep]').forEach(el=>{el.style.display=CUR.v[el.dataset.dep]===el.dataset.depv?'':'none';});
   antroWarn();
-  $$('[data-calc]').forEach(el=>{const k=el.dataset.calc,r=CALCS[k](CUR.v);el.value=r===null?'':fmt(r,k.startsWith('ratio')?3:k.startsWith('wkg')?2:1);});
+  $$('[data-calc]').forEach(el=>{const k=el.dataset.calc,r=CALCS[k](CUR.v);el.value=r===null?'':typeof r==='string'?r:fmt(r,k.startsWith('ratio')?3:k.startsWith('wkg')?2:1);});
   MEAS.forEach(([c])=>{const td=$(`[data-md="${c}"]`);if(td)td.innerHTML=dspan(delta(c));const sh=$(`[data-show="m_${c}_pre"]`);if(sh)sh.textContent=num(CUR.v[`m_${c}_pre`])===null?'':fmt(num(CUR.v[`m_${c}_pre`]),2);});
   DYN.forEach(([c])=>['i','d'].forEach(s=>{const td=$(`[data-rd="${c}_${s}"]`);if(td)td.innerHTML=dspan(rdelta(c,s));}));
   REGIONS.forEach(([c])=>{
@@ -788,6 +799,13 @@ function modDone(c){const t=modText(c);return !!t&&!NOCHANGE.test(t);}
 
 /* ---------- imágenes ---------- */
 let imgTarget=null;
+// Parejas para el informe: [inicial, final] con el mismo pie sin "inicial/final" (90 con 90, 180 con 180). Primero 90, luego 180, luego el resto.
+function imgPairs(){
+  const key=c=>(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|antes|despues)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
+  const rows=[];const get=k=>{let r=rows.find(r=>r.k===k);if(!r){r={k,ini:[],fin:[]};rows.push(r);}return r;};
+  CUR.imgs.filter(i=>i.src).forEach(i=>get(key(i.cap))[imgPhase(i)].push(i));
+  const rank=k=>k==='90'?0:k==='180'?1:2; rows.sort((a,b)=>rank(a.k)-rank(b.k));
+  const out=[];rows.forEach(r=>{for(let j=0;j<Math.max(r.ini.length,r.fin.length);j++)out.push([r.ini[j]||null,r.fin[j]||null]);});return out;}
 function imgPhase(im){return im.ph||(/final|post/i.test(im.cap||'')?'fin':'ini');}
 function renderImgs(){
   ['ini','fin'].forEach(ph=>{
@@ -836,7 +854,7 @@ function simpleBody(v){
 }
 function pdfName(){
   const v=CUR.v; const slug=t=>(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
-  return `Informe_biomecanica_${slug(v.nombre)||CUR.id}_${v.fecha||today()}.pdf`;
+  const c=bioCode(v); return c?`${c}.pdf`:`Informe_biomecanica_${CUR.id}_${v.fecha||today()}.pdf`;
 }
 async function downloadPDF(){
   if(typeof html2pdf==='undefined') return toast('No se pudo cargar el generador de PDF. Usa el botón Imprimir → Guardar como PDF.',1);
@@ -849,7 +867,7 @@ async function downloadPDF(){
       image:{type:'jpeg',quality:0.95},
       html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,x:0,y:0,windowWidth:el.offsetWidth},
       jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-      pagebreak:{mode:['css','legacy'],before:'.pb',avoid:['.r-sec','.r-img','tr','.r-bar']}
+      pagebreak:{mode:['css','legacy'],before:'.pb',avoid:['.r-sec','.r-pair','.r-img','tr','.r-bar']}
     }).from(el).save();
     toast('PDF descargado: '+pdfName());
   }catch(e){console.error(e);toast('Error al generar el PDF: '+e.message,1);}
@@ -892,18 +910,18 @@ function renderReport(){
       dynRows.map(([c,l,u])=>`<tr><td>${esc(l)} (${u})</td>${['pre_i','pre_d','post_i','post_d'].map(s=>`<td>${fmt(num(v[`r_${c}_${s}`]),1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   const mods=MODS.map(([c,l])=>line(l,modText(c)));
-  const imgs=CUR.imgs.filter(i=>i.src&&imgPhase(i)==='ini').concat(CUR.imgs.filter(i=>i.src&&imgPhase(i)==='fin'));
+  const pairs=imgPairs();
 
   $('#report').innerHTML=`
   <div class="rp">
     <div class="r-top"><span>${esc(S.report_title)}</span><span class="rb">${esc(S.header_right)}</span></div>
-    <div class="r-name">${esc(v.nombre||'Nombre del ciclista')}</div>
+    <div class="r-name">${esc(bioCode(v)||'Código del ciclista')}</div>
     <div class="r-date">${esc(fecha)}</div>
     <div class="r-logo">${logo?`<img src="${logo}" alt="">`:''}</div>
     <div class="r-cols">
       <div>
         <div class="r-bar">Ciclista</div>
-        <div class="r-blk">${[v.nombre,CALCS.edad(v)!==null&&('Edad: '+CALCS.edad(v)),rv('sexo'),v.nivel&&('Nivel: '+(rv('nivel')||'').split(' — ')[0]),v.potenciometro==='1'&&num(v.w_20min)!==null&&('Potencia máx. 20 min: '+fmt(num(v.w_20min),0)+' W'+(CALCS.wkg_20min(v)!==null?' ('+fmt(CALCS.wkg_20min(v),2)+' W/kg)':'')),v.potenciometro==='1'&&num(v.w_rodaje)!==null&&('Potencia media en rodaje: '+fmt(num(v.w_rodaje),0)+' W'+(CALCS.wkg_rodaje(v)!==null?' ('+fmt(CALCS.wkg_rodaje(v),2)+' W/kg)':'')),v.altura&&('Altura: '+fmt(cm(v.altura),1)+' cm'+(v.peso?' · Peso: '+v.peso+' kg':'')),v.telefono,v.email].filter(Boolean).map(esc).join('\n')}</div>
+        <div class="r-blk">${[bioCode(v),CALCS.edad(v)!==null&&('Edad: '+CALCS.edad(v)),rv('sexo'),v.nivel&&('Nivel: '+(rv('nivel')||'').split(' — ')[0]),v.potenciometro==='1'&&num(v.w_20min)!==null&&('Potencia máx. 20 min: '+fmt(num(v.w_20min),0)+' W'+(CALCS.wkg_20min(v)!==null?' ('+fmt(CALCS.wkg_20min(v),2)+' W/kg)':'')),v.potenciometro==='1'&&num(v.w_rodaje)!==null&&('Potencia media en rodaje: '+fmt(num(v.w_rodaje),0)+' W'+(CALCS.wkg_rodaje(v)!==null?' ('+fmt(CALCS.wkg_rodaje(v),2)+' W/kg)':'')),v.altura&&('Altura: '+fmt(cm(v.altura),1)+' cm'+(v.peso?' · Peso: '+v.peso+' kg':'')),v.telefono,v.email].filter(Boolean).map(esc).join('\n')}</div>
         <div class="r-bar">Bicicleta</div>
         <div class="r-kv">${[['Marca',v.bici_marca],['Modelo',v.bici_modelo],['Talla',v.bici_talla],['Año',v.bici_anio],['Tubo superior',v.geo_tt&&(v.geo_tt+' cm')],['Tubo vertical',v.geo_st&&(v.geo_st+' cm')],['Tipo',rv('bici_tipo')]].filter(x=>x[1]).map(([k,x])=>`<span class="k">${k}:</span><span>${esc(x)}</span>`).join('')}</div>
       </div>
@@ -938,7 +956,7 @@ function renderReport(){
     ${block('Resumen de modificaciones realizadas',mods)}
     ${block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:''])}
     `}
-    ${imgs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-imgs">${imgs.map(i=>`<div class="r-img"><div class="r-bar">${esc(i.cap)}</div><img src="${i.src}"></div>`).join('')}</div>`:''}
+    ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(pr=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}</div><img src="${i.src}"></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
     <div class="r-foot">${esc(S.footer)}</div>
     <div class="r-ref">Ref. ${esc(CUR.id)}</div>
   </div>`;
