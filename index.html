@@ -131,6 +131,8 @@ table.ft tr.off td:not(:first-child) *{pointer-events:none}
 .stage canvas.gd{pointer-events:none}
 .note.bad{color:var(--bad)}
 #rev-slider,#fv-slider{width:100%;margin:8px 0 0}
+#rev-slots{justify-content:flex-end}
+#rev-slots small{opacity:.8}
 .mrow b.pos{font-variant-numeric:tabular-nums;min-width:86px;text-align:center}
 .angwrap{display:flex;justify-content:center;background:#0e1116;border-radius:8px;overflow:hidden}
 #ang-canvas{touch-action:none;cursor:crosshair;display:block}
@@ -317,7 +319,7 @@ body.pdfcap .repwrap{display:block;padding:0}
 <div class="modal" id="m-cam">
   <div class="box wide">
     <div class="mh"><h3 id="cam-title">Cámara</h3>
-      <label>Duración <select id="cam-dur"><option value="1">1 s</option><option value="1.5" selected>1,5 s</option><option value="2">2 s</option><option value="3">3 s</option></select></label>
+      <label>Duración <select id="cam-dur"><option value="1">1 s</option><option value="2">2 s</option><option value="3" selected>3 s</option><option value="5">5 s</option></select></label>
       <label><input type="checkbox" id="cam-guides" checked> Cuadrícula</label>
       <button class="btn" id="cam-close">Cerrar</button></div>
     <div id="cam-live">
@@ -347,9 +349,10 @@ body.pdfcap .repwrap{display:block;padding:0}
         <button class="btn" data-step="-10" title="10 fotogramas atrás">⏪ −10</button><button class="btn" data-step="-1" title="Fotograma anterior">◀</button>
         <b class="pos" id="rev-pos"></b><button class="btn" data-step="1" title="Fotograma siguiente">▶</button><button class="btn" data-step="10" title="10 fotogramas adelante">+10 ⏩</button>
         <span class="note" id="rev-time" style="margin:0"></span><span style="flex:1"></span>
-        <button class="btn" id="rev-back">Volver a grabar</button><button class="btn" id="rev-use-ang">Usar y medir ángulos</button><button class="btn pri" id="rev-use">Usar este fotograma</button>
+        <button class="btn" id="rev-back">Volver a grabar</button>
       </div>
-      <p class="note" style="margin:0">Teclado: ← → fotograma a fotograma · Mayús + ← → de 10 en 10 · Intro para usar el fotograma.</p>
+      <div class="mrow" id="rev-slots"></div>
+      <p class="note" style="margin:0">Busca la biela a 180 y pulsa «Usar para…»; después, en Ángulos, «← Volver a la grabación» te trae aquí para elegir el de 90 con la misma grabación. Teclado: ← → fotograma a fotograma · Mayús + ← → de 10 en 10.</p>
     </div>
   </div>
 </div>
@@ -364,7 +367,7 @@ body.pdfcap .repwrap{display:block;padding:0}
     <p class="note" id="ang-hint"></p>
     <div class="angwrap"><canvas id="ang-canvas"></canvas></div>
     <div id="ang-list" class="anglist"></div>
-    <div class="mrow" style="justify-content:flex-end;margin-bottom:0"><button class="btn" id="ang-cancel">Cancelar</button><button class="btn pri" id="ang-save">Guardar en la imagen</button></div>
+    <div class="mrow" style="justify-content:flex-end;margin-bottom:0"><button class="btn" id="ang-back" hidden style="margin-right:auto" title="Guarda lo hecho y vuelve a la grabación para elegir otro fotograma">← Volver a la grabación</button><button class="btn" id="ang-cancel">Cancelar</button><button class="btn pri" id="ang-save">Guardar en la imagen</button></div>
   </div>
 </div>
 
@@ -1575,7 +1578,7 @@ function renderDriveList(){
    - El vídeo nunca se guarda: los fotogramas viven en memoria mientras
      se revisan y se descartan al cerrar. Solo queda el fotograma elegido.
    ==================================================================== */
-const CAM={stream:null,frames:[],idx:0,target:null,meas:null,busy:false,cache:new Map(),W:0,H:0,src:'cam',fileURL:null};
+const CAM={stream:null,frames:[],idx:0,target:null,meas:null,busy:false,cache:new Map(),W:0,H:0,src:'cam',fileURL:null,used:{},caseId:null,phase:null};
 const CAM_MAXW=1400;   // lado mayor de los fotogramas guardados (igual que las imágenes subidas)
 
 function camCanvas(W,H){
@@ -1588,7 +1591,7 @@ function camShow(w){['live','file','review'].forEach(k=>$('#cam-'+k).hidden=(k!=
 function camInfo(t,bad){const e=$('#cam-info');e.textContent=t;e.className='note'+(bad?' bad':'');}
 function camSetStage(st,w,h){if(!w||!h)return;st.style.aspectRatio=w+' / '+h;st.style.maxWidth=`calc(64vh * ${(w/h).toFixed(4)})`;}
 function camStopStream(){if(CAM.stream){CAM.stream.getTracks().forEach(t=>t.stop());CAM.stream=null;}const v=$('#cam-video');if(v)v.srcObject=null;}
-function camFree(){CAM.cache.forEach(b=>{try{b.close()}catch(e){}});CAM.cache.clear();CAM.frames=[];}
+function camFree(){CAM.cache.forEach(b=>{try{b.close()}catch(e){}});CAM.cache.clear();CAM.frames=[];CAM.used={};}
 
 /* ---------- cuadrícula tenue de 6 × 3 (18 partes), como la de la cámara del móvil ---------- */
 function drawGrid(c,W,H,lw,snap){
@@ -1604,8 +1607,12 @@ function camGuides(){$$('#m-cam canvas.gd').forEach(cv=>{
   if($('#cam-guides').checked)drawGrid(c,cv.width,cv.height,Math.max(1,Math.round(d*.8)),true);});}
 
 /* ---------- cámara en directo ---------- */
+// La grabación se reutiliza solo para el mismo estudio y la misma fase: las tomas finales necesitan otra grabación tras los cambios
+function camReusable(i){const im=CUR.imgs[i];return !!(CAM.frames.length&&CAM.caseId===CUR.id&&im&&imgPhase(im)===CAM.phase);}
 async function camOpen(i){
-  CAM.target=i;CAM.src='cam';camFree();
+  CAM.target=i;
+  if(camReusable(i))return camReturn();   // la grabación de este estudio y de esta fase (inicial/final) sigue en memoria: se reutiliza
+  CAM.src='cam';camFree();
   $('#cam-title').textContent='Cámara · '+(CUR.imgs[i].cap||'imagen');
   $('#m-cam').classList.add('on');camShow('live');$('#rev-back').textContent='Volver a grabar';
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return camInfo('Este navegador no permite usar la cámara desde la web. Usa Chrome o Edge.',1);
@@ -1668,7 +1675,7 @@ async function camRecord(){
   }catch(e){toast('Error al grabar: '+e.message,1);return;}
   finally{CAM.busy=false;btn.disabled=false;btn.textContent='● Grabar';}
   if(frames.length<2)return toast('No se capturaron fotogramas. Prueba otra vez.',1);
-  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);camReview();
+  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=imgPhase(CUR.imgs[CAM.target]);camReview();
 }
 function camMeasure(fr){
   if(fr.length<2)return {fps:0,drop:0};const d=[];for(let k=1;k<fr.length;k++)d.push(fr[k].ts-fr[k-1].ts);
@@ -1708,7 +1715,7 @@ async function vidExtract(){
     btn.textContent='Procesando…';for(const f of frames){f.b=await f.p;delete f.p;}
   }finally{v.pause();v.playbackRate=1;CAM.busy=false;btn.disabled=false;btn.textContent='Extraer fotogramas';}
   if(frames.length<2)return toast('No se pudieron extraer fotogramas de ese tramo.',1);
-  CAM.frames=frames;CAM.meas=camMeasure(frames);camReview();
+  CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=imgPhase(CUR.imgs[CAM.target]);camReview();
 }
 
 /* ---------- visor fotograma a fotograma ---------- */
@@ -1718,7 +1725,24 @@ function camReview(){
   camSetStage($('#cam-review .stage'),CAM.W,CAM.H);const cv=$('#rev-canvas');cv.width=CAM.W;cv.height=CAM.H;
   $('#rev-info').textContent=`${n} fotogramas · ${fmt(m.fps,0)} fps ${CAM.src==='cam'?'medidos':'en el tramo extraído'}`+(m.drop?` · ${m.drop} fotograma(s) perdido(s)`:'')+
     ` · la biela avanza ≈${fmt(m.fps?540/m.fps:0,1)}° entre fotogramas a 90 rpm`;
-  camDraw();
+  camRenderSlots();camDraw();
+}
+// Un botón por cada hueco de la misma fase (p. ej. 180 inicial y 90 inicial): la misma grabación sirve para los dos
+function camRenderSlots(){
+  const tg=CUR.imgs[CAM.target],ph=tg?imgPhase(tg):'ini';
+  const L=CUR.imgs.map((im,i)=>[im,i]).filter(([im])=>imgPhase(im)===ph);
+  $('#rev-slots').innerHTML=L.map(([im,i])=>{const u=CAM.used[i],cap=esc(im.cap||'imagen');
+    return `<button class="btn${u===undefined?' pri':''}" data-use="${i}" title="Guarda este fotograma en «${cap}» y abre la herramienta de ángulos">${u!==undefined?'✓ ':''}Usar para «${cap}»${u!==undefined?` <small>(fot. ${u+1})</small>`:''}</button>`;}).join('');
+  $$('#rev-slots [data-use]').forEach(b=>b.onclick=()=>camUse(+b.dataset.use));
+}
+// Vuelve al visor con la grabación que sigue en memoria (desde Ángulos o al pulsar Cámara de nuevo)
+function camReturn(){
+  if(!CAM.frames.length)return;
+  $('#cam-title').textContent=(CAM.src==='file'?'Vídeo':'Cámara')+' · elegir fotogramas';
+  $('#rev-back').textContent=CAM.src==='file'?'Volver al vídeo':'Volver a grabar';
+  $('#m-cam').classList.add('on');camShow('review');camSetStage($('#cam-review .stage'),CAM.W,CAM.H);
+  const cv=$('#rev-canvas');if(cv.width!==CAM.W||cv.height!==CAM.H){cv.width=CAM.W;cv.height=CAM.H;}
+  $('#rev-slider').max=CAM.frames.length-1;camRenderSlots();camDraw();
 }
 async function camBitmap(k){
   if(CAM.cache.has(k))return CAM.cache.get(k);
@@ -1735,11 +1759,12 @@ async function camDraw(){
   $('#rev-canvas').getContext('2d').drawImage(b,0,0,CAM.W,CAM.H);camGuides();
 }
 function camStep(n){if(!CAM.frames.length)return;CAM.idx=Math.max(0,Math.min(CAM.frames.length-1,CAM.idx+n));camDraw();}
-async function camUse(andAngles){
-  const f=CAM.frames[CAM.idx];if(!f)return;const i=CAM.target,im=CUR.imgs[i];
-  im.src=await blobToDataURL(f.b);im.did=null;delete im.base;delete im.ann;
-  camClose();renderImgs();setDirty(true);scheduleDraft();toast('Fotograma guardado en «'+(im.cap||'imagen')+'»');
-  if(andAngles)angOpen(i);
+async function camUse(i){   // guarda el fotograma en el hueco i y abre Ángulos; la grabación sigue en memoria para elegir el otro
+  const f=CAM.frames[CAM.idx],im=CUR.imgs[i];if(!f||!im)return;
+  im.src=await blobToDataURL(f.b);im.did=null;delete im.base;delete im.ann;CAM.used[i]=CAM.idx;
+  const ph=imgPhase(im),next=CUR.imgs.findIndex((o,k)=>imgPhase(o)===ph&&CAM.used[k]===undefined);CAM.target=next>=0?next:i;   // la toma pendiente queda como destino de Intro
+  $('#m-cam').classList.remove('on');renderImgs();setDirty(true);scheduleDraft();
+  toast(`Fotograma ${CAM.idx+1} guardado en «${im.cap||'imagen'}»`);angOpen(i);
 }
 function camBack(){camFree();if(CAM.src==='file')camShow('file');else{camShow('live');camStart();}}
 function camClose(){
@@ -1763,7 +1788,7 @@ const ANG_N={angle:3,line:2,bike:10};
 const BIKE_PTS=[['troc','Trocánter'],['l5','L5'],['hombro','Hombro'],['cabeza','Cabeza'],['codo','Codo'],['mano','Mano'],['rodilla','Rodilla'],['tobillo','Tobillo'],['talon','Talón'],['puntera','Puntera']];
 const BIKE_COL={tronco:'#22c55e',lumbar:'#f97316',cuello:'#ef4444',hombro:'#eab308',codo:'#a855f7',cadera:'#3b82f6',rodilla:'#ec4899',tobillo:'#facc15',pie:'#d946ef',kops:'#dc2626'};
 const BIKE_SEG=[['mano','codo','#a855f7'],['codo','hombro','#a855f7'],['hombro','cabeza','#ef4444'],['hombro','l5','#f97316'],['l5','troc','#f97316'],
-  ['troc','rodilla','#ec4899'],['rodilla','tobillo','#facc15'],['tobillo','puntera','#facc15'],['talon','puntera','#d946ef']];
+  ['troc','rodilla','#ec4899'],['rodilla','tobillo','#facc15'],['talon','puntera','#d946ef']];
 const R2D=180/Math.PI;
 const fmtDeg=(x,sign)=>{if(Math.abs(x)<0.05)x=0;return (sign&&x>0?'+':'')+x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1}).replace('-','−')+'°';};
 const fmtCm=x=>x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' cm';
@@ -1795,8 +1820,9 @@ function bikeMeasures(s){
   if(P.hombro&&P.codo&&P.mano)add('codo','Codo',angDeg(P.hombro,P.codo,P.mano));
   if(P.hombro&&P.troc&&P.rodilla)add('cadera','Cadera',angDeg(P.hombro,P.troc,P.rodilla));
   if(P.troc&&P.rodilla&&P.tobillo)add('rodilla','Rodilla',angDeg(P.troc,P.rodilla,P.tobillo));
-  if(P.rodilla&&P.tobillo&&P.puntera)add('tobillo','Tobillo',angDeg(P.rodilla,P.tobillo,P.puntera));
-  if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // + = puntera más baja que el talón
+  if(P.rodilla&&P.tobillo&&P.talon&&P.puntera){   // línea rodilla–tobillo frente a línea talón–puntera, con vértice en el calcáneo
+    const sh=[P.talon[0]+P.rodilla[0]-P.tobillo[0],P.talon[1]+P.rodilla[1]-P.tobillo[1]];add('tobillo','Tobillo',angDeg(sh,P.talon,P.puntera));}
+  if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // desde la puntera respecto a la horizontal; + = talón más alto que la puntera
   if(P.rodilla&&P.puntera)add('kops','KOPS',sc?f*(P.rodilla[0]-P.puntera[0])/sc:null,true,{cm:true});      // + = rodilla por delante de la vertical
   return out;
 }
@@ -1861,9 +1887,15 @@ function drawShape(c,s,u,o){
     if(M.hombro)L(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
     if(M.codo)L(measShort(M.codo),'codo',interior(c,P.codo,P.hombro,P.mano,arcR(P.codo,P.hombro,P.mano,u,10),BIKE_COL.codo,u),BIKE_COL.codo);
     if(M.rodilla)L(measShort(M.rodilla),'rodilla',interior(c,P.rodilla,P.troc,P.tobillo,arcR(P.rodilla,P.troc,P.tobillo,u,12),BIKE_COL.rodilla,u),BIKE_COL.rodilla);
-    if(M.tobillo)L(measShort(M.tobillo),'tobillo',interior(c,P.tobillo,P.rodilla,P.puntera,arcR(P.tobillo,P.rodilla,P.puntera,u,9),BIKE_COL.tobillo,u),BIKE_COL.tobillo);
-    if(M.pie){const len=Math.max(u*16,dist(P.talon,P.puntera)*1.15);seg(c,P.talon,[P.talon[0]+f*len,P.talon[1]],BIKE_COL.pie,u,true);
-      const p0=wedge(c,P.talon,fwd,sweep(fwd,ang2(P.talon,P.puntera)),Math.min(u*12,len*.6),BIKE_COL.pie,u);L(measShort(M.pie),'pie',[p0[0],p0[1]+u*10],BIKE_COL.pie);}
+    if(M.tobillo){   // vértice en el calcáneo: paralela discontinua a tobillo→rodilla desde el talón y arco hasta la línea talón–puntera
+      const col=BIKE_COL.tobillo,fl=dist(P.talon,P.puntera),b=ang2(P.tobillo,P.rodilla),len=Math.max(u*22,dist(P.tobillo,P.rodilla)*.45);
+      seg(c,P.talon,[P.talon[0]+Math.cos(b)*len,P.talon[1]+Math.sin(b)*len],col,u,true);
+      const a1=ang2(P.talon,P.puntera);
+      L(measShort(M.tobillo),'tobillo',wedge(c,P.talon,a1,sweep(a1,b),Math.max(u*5,Math.min(u*13,fl*.45)),col,u),col);}
+    if(M.pie){   // horizontal discontinua desde la puntera hacia atrás y ángulo con la línea puntera–talón
+      const col=BIKE_COL.pie,fl=dist(P.talon,P.puntera),len=Math.max(u*16,fl*1.15),bwd=f>0?Math.PI:0;
+      seg(c,P.puntera,[P.puntera[0]-f*len,P.puntera[1]],col,u,true);
+      const p0=wedge(c,P.puntera,bwd,sweep(bwd,ang2(P.puntera,P.talon)),Math.max(u*6,Math.min(u*16,fl*.55)),col,u);L(measShort(M.pie),'pie',[p0[0],p0[1]+u*9],col);}
     if(M.kops){const top=Math.min(P.rodilla[1],P.puntera[1])-u*14;seg(c,P.puntera,[P.puntera[0],top],BIKE_COL.kops,u,true);
       L(measShort(M.kops),'kops',[P.puntera[0],top-u*6],BIKE_COL.kops);}
     s.p.forEach(q=>dot(c,q,'#ffffff',u));
@@ -1889,6 +1921,7 @@ async function angOpen(i){
   try{ANG.img=await loadImg(im.base||im.src);}catch(e){return toast('No se pudo abrir la imagen.',1);}
   ANG.W=ANG.img.naturalWidth;ANG.H=ANG.img.naturalHeight;
   $('#ang-title').textContent='Ángulos · '+(im.cap||'imagen');
+  $('#ang-back').hidden=!camReusable(i);
   $('#m-ang').classList.add('on');angSetTool(ANG.tool);angFit();angDraw();angList();
 }
 function angFit(){
@@ -1917,7 +1950,7 @@ function angList(){
     if(s.t==='line')return it(s.c||LINE_COL,`${k+1}. Línea: <b>${esc(lineText(s,sc,true))}</b>`,k);
     return `<span class="it bike"><b>${k+1}. Bici</b>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
   });
-  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Pie + = puntera más baja que el talón. KOPS + = rodilla por delante de la vertical de la puntera. El resto, ángulo interior entre segmentos.</p>':'';
+  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo entre la línea tobillo–rodilla y la línea calcáneo (talón)–pie (puntera), con vértice en el calcáneo. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS + = rodilla por delante de la vertical de la puntera. El resto, ángulo interior entre segmentos.</p>':'';
   $('#ang-list').innerHTML=(L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>')+bikeNote;
   $$('[data-angdel]').forEach(b=>b.onclick=()=>{angPush();ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
 }
@@ -2008,7 +2041,7 @@ function angCalibrate(si){
   toast(`Calibrado: ${fmtCm(n)} = ${Math.round(dist(s.p[0],s.p[1]))} px de la imagen`);
 }
 function angClose(){$('#m-ang').classList.remove('on');ANG.img=null;ANG.ptr=null;}
-function angSave(){
+function angSave(back){   // back===true: guarda y vuelve a la grabación para elegir otro fotograma
   const im=CUR.imgs[ANG.i];if(!im)return angClose();ANG.cur=null;
   if(!ANG.shapes.length&&!ANG.flip){if(im.base)im.src=im.base;delete im.base;delete im.ann;}
   else{
@@ -2016,7 +2049,8 @@ function angSave(){
     if(!im.base)im.base=im.src;im.ann={v:2,flip:ANG.flip,shapes:JSON.parse(JSON.stringify(ANG.shapes))};im.src=c.toDataURL('image/jpeg',.9);
   }
   const n=ANG.shapes.length;im.did=null;angClose();renderImgs();setDirty(true);scheduleDraft();
-  toast(n?`${n} medida(s) guardada(s) en «${im.cap||'imagen'}»`:ANG.flip?'Imagen guardada en espejo':'Imagen sin medidas');
+  toast(n?`${n} medida(s) guardada(s) en «${im.cap||'imagen'}»`:ANG.flip?'Imagen guardada en espejo':`Imagen guardada en «${im.cap||'imagen'}»`);
+  if(back===true)camReturn();
 }
 
 /* ---------- conexión de botones ---------- */
@@ -2029,7 +2063,7 @@ function bindCapture(){
   $('#cam-rec').onclick=camRecord;$('#cam-guides').onchange=()=>{LS.set('cam_grid',$('#cam-guides').checked?'1':'0');camGuides();};
   $('#rev-slider').oninput=e=>{CAM.idx=+e.target.value;camDraw();};
   $$('[data-step]').forEach(b=>b.onclick=()=>camStep(+b.dataset.step));
-  $('#rev-back').onclick=camBack;$('#rev-use').onclick=()=>camUse(false);$('#rev-use-ang').onclick=()=>camUse(true);
+  $('#rev-back').onclick=camBack;
   $('#vidpick').onchange=e=>{const f=e.target.files[0];if(f)vidLoad(f);};
   const fv=$('#cam-fvideo');
   $('#fv-slider').oninput=e=>{fv.pause();fv.currentTime=+e.target.value;};
@@ -2043,14 +2077,14 @@ function bindCapture(){
   $('#ang-cal').onclick=angCalStart;$('#ang-flip').onclick=angMirror;
   $('#ang-grid').onclick=()=>{ANG.grid=!ANG.grid;LS.set('ang_grid',ANG.grid?'1':'0');angButtons();angDraw();};
   $('#ang-undo').onclick=angUndo;$('#ang-clear').onclick=()=>{if(ANG.shapes.length&&!confirm('¿Borrar todas las medidas de esta imagen?'))return;angPush();ANG.shapes=[];ANG.cur=null;angList();angHint();angDraw();};
-  $('#ang-cancel').onclick=angClose;$('#ang-save').onclick=angSave;
+  $('#ang-cancel').onclick=angClose;$('#ang-save').onclick=()=>angSave(false);$('#ang-back').onclick=()=>angSave(true);
   window.addEventListener('resize',()=>{if($('#m-ang').classList.contains('on')){angFit();angDraw();}if(camOpenNow())camGuides();});
   document.addEventListener('keydown',e=>{
     const inRev=camOpenNow()&&!$('#cam-review').hidden,tag=(e.target&&e.target.tagName)||'';
     const typing=/INPUT|SELECT|TEXTAREA/.test(tag)&&e.target.id!=='rev-slider';
     if(inRev&&!typing){
       if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();camStep((e.key==='ArrowRight'?1:-1)*(e.shiftKey?10:1));}
-      else if(e.key==='Enter'&&tag!=='BUTTON'){e.preventDefault();camUse(false);}
+      else if(e.key==='Enter'&&tag!=='BUTTON'){e.preventDefault();camUse(CAM.target);}
     }
     if($('#m-ang').classList.contains('on')){
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();angUndo();}
@@ -2058,7 +2092,6 @@ function bindCapture(){
     }
   });
 }
-
 /* ====================================================================
    NAVEGACIÓN E INICIO
    ==================================================================== */
