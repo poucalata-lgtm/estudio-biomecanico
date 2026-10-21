@@ -128,7 +128,7 @@ table.ft tr.off td:not(:first-child) *{pointer-events:none}
 .stage{position:relative;background:#0e1116;border-radius:8px;overflow:hidden;margin:0 auto;width:100%;aspect-ratio:16/9}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .stage video{object-fit:contain}
-.stage canvas.gd{cursor:crosshair;touch-action:none}
+.stage canvas.gd{pointer-events:none}
 .note.bad{color:var(--bad)}
 #rev-slider,#fv-slider{width:100%;margin:8px 0 0}
 .mrow b.pos{font-variant-numeric:tabular-nums;min-width:86px;text-align:center}
@@ -138,6 +138,8 @@ table.ft tr.off td:not(:first-child) *{pointer-events:none}
 .anglist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .anglist .it{border:1px solid var(--line);border-radius:7px;padding:3px 4px 3px 8px;display:flex;gap:7px;align-items:center;font-variant-numeric:tabular-nums;font-size:13px}
 .anglist .it i{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.3)}
+.anglist .it.bike{flex-wrap:wrap;width:100%;row-gap:4px}
+.anglist .it.bike .m{display:inline-flex;align-items:center;gap:4px;margin-right:10px;white-space:nowrap}
 
 /* cases view */
 .panel{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
@@ -316,7 +318,7 @@ body.pdfcap .repwrap{display:block;padding:0}
   <div class="box wide">
     <div class="mh"><h3 id="cam-title">Cámara</h3>
       <label>Duración <select id="cam-dur"><option value="1">1 s</option><option value="1.5" selected>1,5 s</option><option value="2">2 s</option><option value="3">3 s</option></select></label>
-      <label><input type="checkbox" id="cam-guides" checked> Líneas guía</label>
+      <label><input type="checkbox" id="cam-guides" checked> Cuadrícula</label>
       <button class="btn" id="cam-close">Cerrar</button></div>
     <div id="cam-live">
       <div class="mrow">
@@ -328,7 +330,7 @@ body.pdfcap .repwrap{display:block;padding:0}
       <p class="note" id="cam-info"></p>
       <div class="stage"><video id="cam-video" playsinline muted autoplay></video><canvas class="gd"></canvas></div>
       <div class="mrow"><button class="btn pri" id="cam-rec" disabled>● Grabar</button>
-        <span class="note" style="margin:0">El vídeo no se guarda: solo el fotograma que elijas. Toca la imagen para mover la cruz de las líneas guía.</span></div>
+        <span class="note" style="margin:0">El vídeo no se guarda: solo el fotograma que elijas.</span></div>
     </div>
     <div id="cam-file" hidden>
       <p class="note" id="fv-info"></p>
@@ -356,7 +358,8 @@ body.pdfcap .repwrap{display:block;padding:0}
 <div class="modal" id="m-ang">
   <div class="box wide">
     <div class="mh"><h3 id="ang-title">Ángulos</h3>
-      <button class="btn tool on" id="ang-t-angle">∠ Ángulo</button><button class="btn tool" id="ang-t-line">／ Línea</button>
+      <button class="btn tool on" id="ang-t-angle" title="Vértice primero y luego un toque por brazo">∠ Ángulo</button><button class="btn tool" id="ang-t-line">／ Línea</button><button class="btn tool" id="ang-t-bike" title="Modelo de 10 puntos">🚲 Bici</button>
+      <button class="btn tool" id="ang-cal" title="Indica la medida real de una línea">📏 Calibrar</button><button class="btn tool" id="ang-grid" title="Cuadrícula de ayuda (no se guarda en la imagen)">▦ Cuadrícula</button><button class="btn tool" id="ang-flip" title="Voltear la imagen horizontalmente">⇋ Espejo</button>
       <button class="btn" id="ang-undo" title="Ctrl+Z">↶ Deshacer</button><button class="btn" id="ang-clear">Borrar todo</button></div>
     <p class="note" id="ang-hint"></p>
     <div class="angwrap"><canvas id="ang-canvas"></canvas></div>
@@ -889,7 +892,7 @@ function renderImgs(){
   const box=$('#imgs-'+ph); if(!box) return;
   box.innerHTML=CUR.imgs.map((im,i)=>imgPhase(im)!==ph?'':`<div class="slot">
      <div class="ph ${im.src?'has':''}" data-i="${i}" style="${im.src?`background-image:url(${im.src})`:''}">Clic para añadir imagen</div>
-     <div class="row tools"><button class="btn sm" data-cam="${i}" title="Capturar desde la cámara">📷 Cámara</button><button class="btn sm" data-vid="${i}" title="Sacar un fotograma de un vídeo">🎞 Vídeo</button><button class="btn sm" data-ang="${i}" title="Medir ángulos sobre la imagen" ${im.src?'':'disabled'}>📐 Ángulos${im.ann&&im.ann.length?' ('+im.ann.length+')':''}</button></div>
+     <div class="row tools"><button class="btn sm" data-cam="${i}" title="Capturar desde la cámara">📷 Cámara</button><button class="btn sm" data-vid="${i}" title="Sacar un fotograma de un vídeo">🎞 Vídeo</button><button class="btn sm" data-ang="${i}" title="Medir ángulos sobre la imagen" ${im.src?'':'disabled'}>📐 Ángulos${annCount(im)?' ('+annCount(im)+')':''}</button></div>
      <div class="row"><input type="text" value="${esc(im.cap)}" data-cap="${i}" placeholder="Pie de imagen" style="flex:1">
      <button class="btn sm danger" data-rm="${i}" title="Quitar">✕</button></div></div>`).join('');
   box.querySelectorAll('.ph').forEach(p=>p.onclick=()=>{imgTarget=+p.dataset.i;$('#imgpick').value='';$('#imgpick').click();});
@@ -1572,7 +1575,7 @@ function renderDriveList(){
    - El vídeo nunca se guarda: los fotogramas viven en memoria mientras
      se revisan y se descartan al cerrar. Solo queda el fotograma elegido.
    ==================================================================== */
-const CAM={stream:null,frames:[],idx:0,target:null,meas:null,busy:false,cache:new Map(),g:{x:.5,y:.5},W:0,H:0,src:'cam',fileURL:null};
+const CAM={stream:null,frames:[],idx:0,target:null,meas:null,busy:false,cache:new Map(),W:0,H:0,src:'cam',fileURL:null};
 const CAM_MAXW=1400;   // lado mayor de los fotogramas guardados (igual que las imágenes subidas)
 
 function camCanvas(W,H){
@@ -1587,16 +1590,18 @@ function camSetStage(st,w,h){if(!w||!h)return;st.style.aspectRatio=w+' / '+h;st.
 function camStopStream(){if(CAM.stream){CAM.stream.getTracks().forEach(t=>t.stop());CAM.stream=null;}const v=$('#cam-video');if(v)v.srcObject=null;}
 function camFree(){CAM.cache.forEach(b=>{try{b.close()}catch(e){}});CAM.cache.clear();CAM.frames=[];}
 
-/* ---------- líneas guía: cruz horizontal + vertical; se mueve tocando la imagen ---------- */
+/* ---------- cuadrícula tenue de 6 × 3 (18 partes), como la de la cámara del móvil ---------- */
+function drawGrid(c,W,H,lw,snap){
+  c.save();c.strokeStyle='rgba(255,255,255,.45)';c.lineWidth=lw;c.beginPath();
+  const S=v=>snap?Math.round(v)+.5:v;
+  for(let k=1;k<6;k++){const x=S(W*k/6);c.moveTo(x,0);c.lineTo(x,H);}
+  for(let k=1;k<3;k++){const y=S(H*k/3);c.moveTo(0,y);c.lineTo(W,y);}
+  c.stroke();c.restore();
+}
 function camGuides(){$$('#m-cam canvas.gd').forEach(cv=>{
   const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1; if(!r.width)return;
   cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);
-  if(!$('#cam-guides').checked)return;
-  const x=CAM.g.x*cv.width,y=CAM.g.y*cv.height;
-  c.lineWidth=1.5*d;c.setLineDash([9*d,6*d]);c.strokeStyle='rgba(0,229,255,.95)';
-  c.beginPath();c.moveTo(0,y);c.lineTo(cv.width,y);c.moveTo(x,0);c.lineTo(x,cv.height);c.stroke();
-  c.setLineDash([]);c.beginPath();c.arc(x,y,7*d,0,Math.PI*2);c.stroke();});}
-function camGuideClick(e){const r=e.currentTarget.getBoundingClientRect();CAM.g={x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))};if(!$('#cam-guides').checked)$('#cam-guides').checked=true;camGuides();}
+  if($('#cam-guides').checked)drawGrid(c,cv.width,cv.height,Math.max(1,Math.round(d*.8)),true);});}
 
 /* ---------- cámara en directo ---------- */
 async function camOpen(i){
@@ -1744,56 +1749,143 @@ function camClose(){
 }
 
 /* ====================================================================
-   ÁNGULOS (tipo Kinovea): ángulo de 3 puntos y línea con su inclinación
-   La imagen guardada lleva los trazos; se conserva el original (base) y los
-   trazos (ann) para poder corregirlos después.
+   ÁNGULOS (tipo Kinovea)
+   - Ángulo: 1.er toque = vértice, luego un toque por brazo.
+   - Línea: inclinación respecto a la horizontal y, si hay calibración, longitud en cm.
+   - Bici: 10 puntos (trocánter, L5, hombro, cabeza, codo, mano, rodilla, tobillo, talón, puntera).
+   - Arrastrar un punto lo ajusta; arrastrar una línea mueve la figura entera; las etiquetas también se arrastran.
+   La imagen guardada lleva los trazos; se conserva el original (base) y los trazos (ann) para corregirlos después.
    ==================================================================== */
-const ANG={i:null,img:null,W:0,H:0,shapes:[],tool:'angle',cur:null,drag:null,ptr:null,sc:1,css:1};
-const ANG_COL={angle:'#ffd400',line:'#00e5ff'};
-const ANG_N={angle:3,line:2};
-const fmtDeg=x=>x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+'°';
+const ANG={i:null,img:null,W:0,H:0,shapes:[],flip:false,tool:'angle',mode:null,cur:null,drag:null,ptr:null,sc:1,css:1,hist:[],hits:[],grid:false};
+const ANG_PAL=['#ffd400','#22c55e','#3b82f6','#ec4899','#f97316','#a855f7','#06b6d4','#ef4444'];
+const LINE_COL='#00e5ff';
+const ANG_N={angle:3,line:2,bike:10};
+const BIKE_PTS=[['troc','Trocánter'],['l5','L5'],['hombro','Hombro'],['cabeza','Cabeza'],['codo','Codo'],['mano','Mano'],['rodilla','Rodilla'],['tobillo','Tobillo'],['talon','Talón'],['puntera','Puntera']];
+const BIKE_COL={tronco:'#22c55e',lumbar:'#f97316',cuello:'#ef4444',hombro:'#eab308',codo:'#a855f7',cadera:'#3b82f6',rodilla:'#ec4899',tobillo:'#facc15',pie:'#d946ef',kops:'#dc2626'};
+const BIKE_SEG=[['mano','codo','#a855f7'],['codo','hombro','#a855f7'],['hombro','cabeza','#ef4444'],['hombro','l5','#f97316'],['l5','troc','#f97316'],
+  ['troc','rodilla','#ec4899'],['rodilla','tobillo','#facc15'],['tobillo','puntera','#facc15'],['talon','puntera','#d946ef']];
+const R2D=180/Math.PI;
+const fmtDeg=(x,sign)=>{if(Math.abs(x)<0.05)x=0;return (sign&&x>0?'+':'')+x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1}).replace('-','−')+'°';};
+const fmtCm=x=>x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' cm';
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 function angDeg(A,B,C){const a=[A[0]-B[0],A[1]-B[1]],c=[C[0]-B[0],C[1]-B[1]];const n=Math.hypot(...a)*Math.hypot(...c);
-  return n?Math.acos(Math.max(-1,Math.min(1,(a[0]*c[0]+a[1]*c[1])/n)))*180/Math.PI:0;}
-function lineDeg(P,Q){return Math.atan2(Math.abs(Q[1]-P[1]),Math.abs(Q[0]-P[0]))*180/Math.PI;}
-function angValue(s){return s.t==='angle'?angDeg(...s.p):lineDeg(...s.p);}
-function angLabel(s){return s.t==='angle'?fmtDeg(angValue(s)):fmtDeg(angValue(s))+' vs horizontal';}
+  return n?Math.acos(Math.max(-1,Math.min(1,(a[0]*c[0]+a[1]*c[1])/n)))*R2D:0;}
+function lineDeg(P,Q){return Math.atan2(Math.abs(Q[1]-P[1]),Math.abs(Q[0]-P[0]))*R2D;}
+function segDist(p,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy;let t=L?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);}
 const angU=()=>Math.max(ANG.W,ANG.H)/450;    // unidad de grosor/tamaño en píxeles de la imagen
 function loadImg(src){return new Promise((res,rej)=>{const m=new Image();m.onload=()=>res(m);m.onerror=rej;m.src=src;});}
+function angScale(){const s=ANG.shapes.find(s=>s.t==='line'&&s.cal>0&&s.p.length===2);return s?dist(s.p[0],s.p[1])/s.cal:0;}   // px por cm
+function annShapes(im){const A=im&&im.ann;return Array.isArray(A)?A:(A&&A.shapes)||[];}
+function annCount(im){return annShapes(im).length;}
 
-function angShape(c,s,u,preview){
-  const col=ANG_COL[s.t],P=s.p;if(!P.length)return;
-  c.lineCap='round';c.lineJoin='round';
-  const path=()=>{c.beginPath();c.moveTo(P[0][0],P[0][1]);for(let k=1;k<P.length;k++)c.lineTo(P[k][0],P[k][1]);if(preview)c.lineTo(preview[0],preview[1]);};
-  c.strokeStyle='rgba(0,0,0,.55)';c.lineWidth=u*1.7;path();c.stroke();
-  c.strokeStyle=col;c.lineWidth=u*.85;if(preview)c.setLineDash([u*3,u*2]);path();c.stroke();c.setLineDash([]);
-  let label=null,lx=0,ly=0;
-  if(s.t==='angle'&&P.length===3){
-    const [A,B,C]=P;const a1=Math.atan2(A[1]-B[1],A[0]-B[0]),a2=Math.atan2(C[1]-B[1],C[0]-B[0]);
-    let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
-    const r=Math.max(u*4,Math.min(u*16,Math.hypot(A[0]-B[0],A[1]-B[1])*.45,Math.hypot(C[0]-B[0],C[1]-B[1])*.45));
-    c.beginPath();c.moveTo(B[0],B[1]);c.arc(B[0],B[1],r,a1,a1+d,d<0);c.closePath();c.fillStyle='rgba(255,212,0,.28)';c.fill();
-    c.beginPath();c.arc(B[0],B[1],r,a1,a1+d,d<0);c.strokeStyle=col;c.lineWidth=u*.6;c.stroke();
-    const am=a1+d/2;lx=B[0]-Math.cos(am)*(u*13);ly=B[1]-Math.sin(am)*(u*13);   // etiqueta al otro lado del vértice, sin tapar el arco
-    label=angLabel(s);
-  }
-  if(s.t==='line'&&P.length===2){lx=(P[0][0]+P[1][0])/2;ly=(P[0][1]+P[1][1])/2-u*9;label=angLabel(s);}
-  P.forEach(q=>{c.beginPath();c.arc(q[0],q[1],u*1.9,0,Math.PI*2);c.fillStyle=col;c.fill();c.lineWidth=u*.6;c.strokeStyle='rgba(0,0,0,.75)';c.stroke();});
-  if(label){
-    c.font=`700 ${u*9}px Roboto, Arial, sans-serif`;c.textAlign='center';c.textBaseline='middle';
-    const w=c.measureText(label).width,bw=w+u*6,bh=u*12;
-    lx=Math.min(ANG.W-bw/2,Math.max(bw/2,lx));ly=Math.min(ANG.H-bh/2,Math.max(bh/2,ly));
-    c.fillStyle='rgba(0,0,0,.75)';c.beginPath();if(c.roundRect)c.roundRect(lx-bw/2,ly-bh/2,bw,bh,u*3);else c.rect(lx-bw/2,ly-bh/2,bw,bh);c.fill();
-    c.fillStyle=col;c.fillText(label,lx,ly+u*.4);
+/* ---------- modelo Bici: medidas ---------- */
+const bikePts=s=>Object.fromEntries(BIKE_PTS.slice(0,s.p.length).map((b,k)=>[b[0],s.p[k]]));
+function bikeFacing(P){if(P.mano&&P.troc)return P.mano[0]>=P.troc[0]?1:-1;if(P.puntera&&P.talon)return P.puntera[0]>=P.talon[0]?1:-1;if(P.hombro&&P.troc)return P.hombro[0]>=P.troc[0]?1:-1;return 1;}
+function bikeMeasures(s){
+  const P=bikePts(s),f=bikeFacing(P),sc=angScale(),out=[];
+  // Vectores en un sistema "mirando a la derecha y con el eje Y hacia arriba", así los signos no dependen del lado de la foto
+  const V=(a,b)=>[f*(b[0]-a[0]),-(b[1]-a[1])],cr=(u,v)=>u[0]*v[1]-u[1]*v[0],dt=(u,v)=>u[0]*v[0]+u[1]*v[1];
+  const add=(key,lab,val,signed,x)=>out.push(Object.assign({key,lab,val,signed,col:BIKE_COL[key]},x||{}));
+  if(P.troc&&P.hombro){const T=V(P.troc,P.hombro);add('tronco','Tronco',Math.atan2(T[1],T[0])*R2D,false);}
+  if(P.troc&&P.l5&&P.hombro){   // 0 = L5 alineado con trocánter–hombro; + = espalda hacia atrás (flexión); − = anteversión
+    const sg=cr(V(P.troc,P.hombro),V(P.troc,P.l5))>0?1:-1;add('lumbar','Lumbar',sg*(180-angDeg(P.troc,P.l5,P.hombro)),true);}
+  if(P.hombro&&P.cabeza&&(P.l5||P.troc)){   // 0 = cabeza alineada con el tronco; + extensión; − flexión
+    const u=V(P.l5||P.troc,P.hombro),h=V(P.hombro,P.cabeza);add('cuello','Cuello',Math.atan2(cr(u,h),dt(u,h))*R2D,true);}
+  if(P.troc&&P.hombro&&P.codo)add('hombro','Hombro',angDeg(P.troc,P.hombro,P.codo));
+  if(P.hombro&&P.codo&&P.mano)add('codo','Codo',angDeg(P.hombro,P.codo,P.mano));
+  if(P.hombro&&P.troc&&P.rodilla)add('cadera','Cadera',angDeg(P.hombro,P.troc,P.rodilla));
+  if(P.troc&&P.rodilla&&P.tobillo)add('rodilla','Rodilla',angDeg(P.troc,P.rodilla,P.tobillo));
+  if(P.rodilla&&P.tobillo&&P.puntera)add('tobillo','Tobillo',angDeg(P.rodilla,P.tobillo,P.puntera));
+  if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // + = puntera más baja que el talón
+  if(P.rodilla&&P.puntera)add('kops','KOPS',sc?f*(P.rodilla[0]-P.puntera[0])/sc:null,true,{cm:true});      // + = rodilla por delante de la vertical
+  return out;
+}
+const measShort=m=>m.cm?(m.val===null?'KOPS':'KOPS '+(m.val>=0?'+':'')+fmtCm(m.val)):m.lab+' '+fmtDeg(m.val,m.signed);
+const measLong=m=>m.cm?(m.val===null?'KOPS: calibra una línea para ver la distancia':'KOPS '+(m.val>=0?'+':'')+fmtCm(m.val)+(m.val>=0?' (rodilla por delante)':' (rodilla por detrás)')):m.lab+' '+fmtDeg(m.val,m.signed);
+function lineText(s,sc,long){const L=dist(s.p[0],s.p[1]),d=fmtDeg(lineDeg(s.p[0],s.p[1]))+(long?' vs horizontal':'');
+  if(s.cal)return fmtCm(s.cal)+(long?' (referencia de calibración)':' (ref.)')+' · '+d;return d+(sc?' · '+fmtCm(L/sc):'');}
+
+/* ---------- dibujo ---------- */
+function lum(hex){const n=parseInt(hex.slice(1),16);return (0.299*((n>>16)&255)+0.587*((n>>8)&255)+0.114*(n&255))/255;}
+function seg(c,a,b,col,u,dash){c.lineCap='round';c.setLineDash(dash?[u*3,u*2.2]:[]);
+  c.strokeStyle='rgba(0,0,0,.5)';c.lineWidth=u*1.6;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();
+  c.strokeStyle=col;c.lineWidth=u*.8;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();c.setLineDash([]);}
+function dot(c,q,col,u){c.beginPath();c.arc(q[0],q[1],u*1.8,0,Math.PI*2);c.fillStyle=col;c.fill();c.lineWidth=u*.55;c.strokeStyle='rgba(0,0,0,.8)';c.stroke();}
+function wedge(c,B,a1,d,r,col,u){   // sector de ángulo relleno (estilo Kinovea)
+  c.beginPath();c.moveTo(B[0],B[1]);c.arc(B[0],B[1],r,a1,a1+d,d<0);c.closePath();c.globalAlpha=.32;c.fillStyle=col;c.fill();c.globalAlpha=1;
+  c.beginPath();c.arc(B[0],B[1],r,a1,a1+d,d<0);c.strokeStyle=col;c.lineWidth=u*.55;c.stroke();
+  const m=a1+d/2;return [B[0]+Math.cos(m)*(r+u*9),B[1]+Math.sin(m)*(r+u*9)];}
+const sweep=(a1,a2)=>{let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d;};
+const ang2=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0]);
+function interior(c,B,A,C,r,col,u){const a1=ang2(B,A);return wedge(c,B,a1,sweep(a1,ang2(B,C)),r,col,u);}
+const arcR=(B,A,C,u,k)=>Math.max(u*4,Math.min(u*k,dist(B,A)*.42,dist(B,C)*.42));
+function label(c,txt,pos,col,u,rec){
+  c.font=`700 ${u*7.2}px Roboto, Arial, sans-serif`;c.textAlign='center';c.textBaseline='middle';
+  const w=c.measureText(txt).width+u*5,h=u*10;let [x,y]=pos;x=Math.min(ANG.W-w/2,Math.max(w/2,x));y=Math.min(ANG.H-h/2,Math.max(h/2,y));
+  c.globalAlpha=.88;c.fillStyle=col;c.beginPath();if(c.roundRect)c.roundRect(x-w/2,y-h/2,w,h,u*2.5);else c.rect(x-w/2,y-h/2,w,h);c.fill();c.globalAlpha=1;
+  c.fillStyle=lum(col)>.6?'#111':'#fff';c.fillText(txt,x,y+u*.35);if(rec)rec({x,y,w,h});
+}
+function tag(c,txt,q,u){c.font=`600 ${u*5.6}px Roboto, Arial, sans-serif`;c.textAlign='left';c.textBaseline='middle';
+  c.lineWidth=u*1.2;c.strokeStyle='rgba(0,0,0,.8)';c.strokeText(txt,q[0]+u*3,q[1]-u*3);c.fillStyle='#fff';c.fillText(txt,q[0]+u*3,q[1]-u*3);}
+function drawShape(c,s,u,o){
+  o=o||{};const pv=o.preview||null;
+  const rec=o.rec!=null?(key=>r=>ANG.hits.push(Object.assign({si:o.rec,key},r))):(()=>null);
+  const off=k=>(s.lo&&s.lo[k])||[0,0];
+  const L=(txt,key,pos,col)=>label(c,txt,[pos[0]+off(key)[0],pos[1]+off(key)[1]],col,u,rec(key));
+  if(s.t==='angle'){
+    const col=s.c||ANG_PAL[0],[V,A,C]=s.p;
+    if(A)seg(c,V,A,col,u);if(C)seg(c,V,C,col,u);
+    if(pv&&s.p.length<3)seg(c,V,pv,col,u,true);
+    const C2=C||(A&&pv);if(A&&C2)L(fmtDeg(angDeg(A,V,C2)),'a',interior(c,V,A,C2,arcR(V,A,C2,u,13),col,u),col);
+    s.p.forEach(q=>dot(c,q,col,u));
+  }else if(s.t==='line'){
+    const col=s.c||LINE_COL,[P,Q]=s.p,Q2=Q||pv;
+    if(Q2){seg(c,P,Q2,col,u,!Q);const t={p:[P,Q2],cal:Q?s.cal:0};L(lineText(t,angScale()),'l',[(P[0]+Q2[0])/2,(P[1]+Q2[1])/2-u*9],col);}
+    s.p.forEach(q=>dot(c,q,col,u));
+  }else if(s.t==='bike'){
+    const P=bikePts(s),f=bikeFacing(P),M=Object.fromEntries(bikeMeasures(s).map(m=>[m.key,m]));
+    BIKE_SEG.forEach(([a,b,col])=>{if(P[a]&&P[b])seg(c,P[a],P[b],col,u);});
+    if(pv&&s.p.length<10)seg(c,s.p[s.p.length-1],pv,'#ffffff',u,true);
+    const fwd=f>0?0:Math.PI;
+    if(M.tronco){const len=Math.max(u*30,dist(P.troc,P.hombro)*.75);seg(c,P.troc,[P.troc[0]+f*len,P.troc[1]],BIKE_COL.tronco,u,true);
+      wedge(c,P.troc,fwd,sweep(fwd,ang2(P.troc,P.hombro)),Math.min(u*24,len*.6),BIKE_COL.tronco,u);
+      L(measShort(M.tronco),'tronco',[P.troc[0]+f*(len+u*16),P.troc[1]],BIKE_COL.tronco);}   // etiqueta al final de la horizontal, sin pisar la de cadera
+    if(M.cadera)L(measShort(M.cadera),'cadera',interior(c,P.troc,P.hombro,P.rodilla,arcR(P.troc,P.hombro,P.rodilla,u,12),BIKE_COL.cadera,u),BIKE_COL.cadera);
+    if(M.lumbar){const a1=ang2(P.troc,P.l5),ext=[P.l5[0]+Math.cos(a1)*u*22,P.l5[1]+Math.sin(a1)*u*22];seg(c,P.l5,ext,BIKE_COL.lumbar,u,true);
+      wedge(c,P.l5,a1,sweep(a1,ang2(P.l5,P.hombro)),u*12,BIKE_COL.lumbar,u);
+      const T=[f*(P.hombro[0]-P.troc[0]),-(P.hombro[1]-P.troc[1])],n=Math.hypot(...T)||1,back=[f*(-T[1])/n,-(T[0])/n];
+      L(measShort(M.lumbar),'lumbar',[P.l5[0]+back[0]*u*20,P.l5[1]+back[1]*u*20],BIKE_COL.lumbar);}
+    if(M.cuello){const B=P.l5||P.troc,a1=ang2(B,P.hombro),len=Math.max(u*20,dist(P.hombro,P.cabeza)*.9),ext=[P.hombro[0]+Math.cos(a1)*len,P.hombro[1]+Math.sin(a1)*len];
+      seg(c,P.hombro,ext,BIKE_COL.cuello,u,true);
+      L(measShort(M.cuello),'cuello',wedge(c,P.hombro,a1,sweep(a1,ang2(P.hombro,P.cabeza)),Math.min(u*18,len*.7),BIKE_COL.cuello,u),BIKE_COL.cuello);}
+    if(M.hombro)L(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
+    if(M.codo)L(measShort(M.codo),'codo',interior(c,P.codo,P.hombro,P.mano,arcR(P.codo,P.hombro,P.mano,u,10),BIKE_COL.codo,u),BIKE_COL.codo);
+    if(M.rodilla)L(measShort(M.rodilla),'rodilla',interior(c,P.rodilla,P.troc,P.tobillo,arcR(P.rodilla,P.troc,P.tobillo,u,12),BIKE_COL.rodilla,u),BIKE_COL.rodilla);
+    if(M.tobillo)L(measShort(M.tobillo),'tobillo',interior(c,P.tobillo,P.rodilla,P.puntera,arcR(P.tobillo,P.rodilla,P.puntera,u,9),BIKE_COL.tobillo,u),BIKE_COL.tobillo);
+    if(M.pie){const len=Math.max(u*16,dist(P.talon,P.puntera)*1.15);seg(c,P.talon,[P.talon[0]+f*len,P.talon[1]],BIKE_COL.pie,u,true);
+      const p0=wedge(c,P.talon,fwd,sweep(fwd,ang2(P.talon,P.puntera)),Math.min(u*12,len*.6),BIKE_COL.pie,u);L(measShort(M.pie),'pie',[p0[0],p0[1]+u*10],BIKE_COL.pie);}
+    if(M.kops){const top=Math.min(P.rodilla[1],P.puntera[1])-u*14;seg(c,P.puntera,[P.puntera[0],top],BIKE_COL.kops,u,true);
+      L(measShort(M.kops),'kops',[P.puntera[0],top-u*6],BIKE_COL.kops);}
+    s.p.forEach(q=>dot(c,q,'#ffffff',u));
+    if(o.tags)s.p.forEach((q,k)=>tag(c,BIKE_PTS[k][1],q,u));
   }
 }
-function angRender(c,u,withPreview){
-  c.drawImage(ANG.img,0,0,ANG.W,ANG.H);
-  ANG.shapes.forEach(s=>angShape(c,s,u));
-  if(ANG.cur)angShape(c,ANG.cur,u,withPreview&&!ANG.drag&&ANG.ptr?ANG.ptr:null);
+function angRender(c,u,o){
+  o=o||{};
+  if(ANG.flip){c.save();c.translate(ANG.W,0);c.scale(-1,1);c.drawImage(ANG.img,0,0,ANG.W,ANG.H);c.restore();}else c.drawImage(ANG.img,0,0,ANG.W,ANG.H);
+  if(o.grid)drawGrid(c,ANG.W,ANG.H,o.gw||1,false);
+  ANG.shapes.forEach((s,si)=>drawShape(c,s,u,{rec:o.rec?si:null}));
+  if(ANG.cur)drawShape(c,ANG.cur,u,{preview:o.preview&&!ANG.drag&&ANG.ptr?ANG.ptr:null,tags:true});
 }
+
+/* ---------- abrir, ajustar a pantalla, dibujar ---------- */
 async function angOpen(i){
   const im=CUR.imgs[i];if(!im||!im.src)return toast('Primero añade una imagen en ese hueco.',1);
-  ANG.i=i;ANG.shapes=JSON.parse(JSON.stringify(im.ann||[]));ANG.cur=null;ANG.drag=null;ANG.ptr=null;
+  ANG.i=i;ANG.flip=!!(im.ann&&!Array.isArray(im.ann)&&im.ann.flip);
+  ANG.shapes=JSON.parse(JSON.stringify(annShapes(im))).map(s=>{   // compatibilidad con la primera versión (vértice en medio)
+    if(s.t==='angle'&&s.o!=='v'&&s.p.length===3){s.p=[s.p[1],s.p[0],s.p[2]];s.o='v';}
+    if(s.t==='angle'&&!s.c)s.c=ANG_PAL[0];return s;});
+  ANG.cur=null;ANG.drag=null;ANG.ptr=null;ANG.mode=null;ANG.hist=[];ANG.grid=LS.get('ang_grid')==='1';
   try{ANG.img=await loadImg(im.base||im.src);}catch(e){return toast('No se pudo abrir la imagen.',1);}
   ANG.W=ANG.img.naturalWidth;ANG.H=ANG.img.naturalHeight;
   $('#ang-title').textContent='Ángulos · '+(im.cap||'imagen');
@@ -1801,74 +1893,140 @@ async function angOpen(i){
 }
 function angFit(){
   const cv=$('#ang-canvas'),wrap=cv.parentElement,d=window.devicePixelRatio||1;
-  const css=Math.min((wrap.clientWidth||800)/ANG.W,(window.innerHeight*.64)/ANG.H);
+  const css=Math.min((wrap.clientWidth||800)/ANG.W,(window.innerHeight*.62)/ANG.H);
   cv.style.width=Math.round(ANG.W*css)+'px';cv.style.height=Math.round(ANG.H*css)+'px';
   cv.width=Math.round(ANG.W*css*d);cv.height=Math.round(ANG.H*css*d);ANG.css=css;ANG.sc=css*d;
 }
 function angDraw(){
   if(!ANG.img)return;const cv=$('#ang-canvas'),c=cv.getContext('2d');
   c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,cv.width,cv.height);
-  const u=Math.max(angU(),1.6/ANG.css);   // en pantalla, trazos nunca más finos de ~1,5 px
-  c.setTransform(ANG.sc,0,0,ANG.sc,0,0);angRender(c,u,true);
-  // lupa (3x) en la esquina contraria al puntero
+  const u=Math.max(angU(),1.5/ANG.css);   // en pantalla, trazos nunca más finos de ~1,5 px
+  ANG.hits=[];c.setTransform(ANG.sc,0,0,ANG.sc,0,0);angRender(c,u,{preview:true,rec:true,grid:ANG.grid,gw:1/ANG.css});
+  // lupa (3×) en la esquina contraria al puntero
   const p=ANG.ptr;if(!p)return;const d=window.devicePixelRatio||1,R=Math.min(75*d,cv.width/5),Z=3,s=ANG.sc*Z;
-  const left=p[0]*ANG.sc>cv.width/2,cx=left?R+8*d:cv.width-R-8*d,cy=(p[1]*ANG.sc>cv.height/2)?R+8*d:cv.height-R-8*d;
+  const cx=p[0]*ANG.sc>cv.width/2?R+8*d:cv.width-R-8*d,cy=(p[1]*ANG.sc>cv.height/2)?R+8*d:cv.height-R-8*d;
   c.save();c.setTransform(1,0,0,1,0,0);c.beginPath();c.arc(cx,cy,R,0,Math.PI*2);c.clip();c.fillStyle='#000';c.fillRect(cx-R,cy-R,2*R,2*R);
-  c.setTransform(s,0,0,s,cx-p[0]*s,cy-p[1]*s);angRender(c,u,true);
+  c.setTransform(s,0,0,s,cx-p[0]*s,cy-p[1]*s);angRender(c,u,{preview:true});
   c.setTransform(1,0,0,1,0,0);c.strokeStyle='rgba(255,60,60,.95)';c.lineWidth=1*d;c.beginPath();c.moveTo(cx-R,cy);c.lineTo(cx+R,cy);c.moveTo(cx,cy-R);c.lineTo(cx,cy+R);c.stroke();
   c.restore();c.setTransform(1,0,0,1,0,0);c.beginPath();c.arc(cx,cy,R,0,Math.PI*2);c.strokeStyle='#fff';c.lineWidth=2*d;c.stroke();
 }
 function angList(){
-  const L=ANG.shapes.map((s,k)=>`<span class="it"><i style="background:${ANG_COL[s.t]}"></i>${k+1}. ${s.t==='angle'?'Ángulo':'Línea'}: <b>${esc(angLabel(s))}</b><button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`);
-  $('#ang-list').innerHTML=L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>';
-  $$('[data-angdel]').forEach(b=>b.onclick=()=>{ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
+  const sc=angScale(),it=(col,html,k)=>`<span class="it"><i style="background:${col}"></i>${html}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
+  const L=ANG.shapes.map((s,k)=>{
+    if(s.t==='angle')return it(s.c,`${k+1}. Ángulo: <b>${fmtDeg(angDeg(s.p[1],s.p[0],s.p[2]))}</b>`,k);
+    if(s.t==='line')return it(s.c||LINE_COL,`${k+1}. Línea: <b>${esc(lineText(s,sc,true))}</b>`,k);
+    return `<span class="it bike"><b>${k+1}. Bici</b>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
+  });
+  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Pie + = puntera más baja que el talón. KOPS + = rodilla por delante de la vertical de la puntera. El resto, ángulo interior entre segmentos.</p>':'';
+  $('#ang-list').innerHTML=(L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>')+bikeNote;
+  $$('[data-angdel]').forEach(b=>b.onclick=()=>{angPush();ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
 }
-function angSetTool(t){
-  ANG.tool=t;ANG.cur=null;$('#ang-t-angle').classList.toggle('on',t==='angle');$('#ang-t-line').classList.toggle('on',t==='line');
-  $('#ang-hint').textContent=t==='angle'
-    ?'Ángulo: marca 3 puntos — un extremo, el vértice (p. ej. la rodilla) y el otro extremo. Arrastra cualquier punto para ajustarlo; la lupa ayuda a afinar.'
-    :'Línea: marca 2 puntos. Muestra su inclinación respecto a la horizontal (p. ej. tronco o antebrazo). Arrastra los puntos para ajustarla.';
-  angDraw();
+function angButtons(){
+  ['angle','line','bike'].forEach(t=>$('#ang-t-'+t).classList.toggle('on',ANG.tool===t&&ANG.mode!=='cal'));
+  $('#ang-cal').classList.toggle('on',ANG.mode==='cal');$('#ang-grid').classList.toggle('on',ANG.grid);$('#ang-flip').classList.toggle('on',ANG.flip);
 }
+function angHint(){
+  let t;const n=ANG.cur?ANG.cur.p.length:0;
+  if(ANG.mode==='cal')t='Calibrar: toca la línea de referencia (algo cuya medida conozcas, p. ej. la biela) y escribe su medida real en cm. Después todas las líneas y el KOPS se miden en cm.';
+  else if(ANG.tool==='angle')t=!ANG.cur?'Ángulo: toca primero el vértice (p. ej. la rodilla) y después el extremo de cada brazo. Arrastra un punto para ajustarlo o una línea para mover el ángulo entero.'
+    :n===1?'Ahora toca el extremo del primer brazo.':'Ahora toca el extremo del segundo brazo.';
+  else if(ANG.tool==='line')t=!ANG.cur?'Línea: toca 2 puntos. Da su inclinación respecto a la horizontal y, si has calibrado, su longitud en cm.':'Toca el otro extremo de la línea.';
+  else if(n>=10)t='';
+  else t=(ANG.cur?'':'Bici: ')+`toca ${BIKE_PTS[n][1]} (${n+1}/10). Orden: trocánter, L5, hombro, cabeza, codo, mano, rodilla, tobillo, talón y puntera.`+(!ANG.cur&&ANG.shapes.some(s=>s.t==='bike')?' Para ajustar el modelo ya hecho, arrastra sus puntos o etiquetas.':'');
+  $('#ang-hint').textContent=t;
+}
+function angSetTool(t){ANG.tool=t;ANG.cur=null;ANG.mode=null;angButtons();angHint();angDraw();}
+
+/* ---------- interacción ---------- */
 function angPt(e){const r=$('#ang-canvas').getBoundingClientRect();return [Math.min(ANG.W,Math.max(0,(e.clientX-r.left)/ANG.css)),Math.min(ANG.H,Math.max(0,(e.clientY-r.top)/ANG.css))];}
-function angHit(p){const tol=12/ANG.css;for(let si=ANG.shapes.length-1;si>=0;si--){const P=ANG.shapes[si].p;for(let k=0;k<P.length;k++)if(Math.hypot(P[k][0]-p[0],P[k][1]-p[1])<=tol)return [si,k];}return null;}
+function shapeSegs(s){
+  if(s.t==='angle')return [[0,1],[0,2]].filter(([a,b])=>b<s.p.length);
+  if(s.t==='line')return s.p.length>1?[[0,1]]:[];
+  const ix=Object.fromEntries(BIKE_PTS.map((b,k)=>[b[0],k]));return BIKE_SEG.map(([a,b])=>[ix[a],ix[b]]).filter(([a,b])=>a<s.p.length&&b<s.p.length);
+}
+function angHitTest(p){
+  const tol=12/ANG.css;
+  for(let si=ANG.shapes.length-1;si>=0;si--){const P=ANG.shapes[si].p;for(let k=0;k<P.length;k++)if(dist(P[k],p)<=tol)return {k:'pt',si,pi:k};}
+  for(let k=ANG.hits.length-1;k>=0;k--){const h=ANG.hits[k];if(Math.abs(p[0]-h.x)<=h.w/2&&Math.abs(p[1]-h.y)<=h.h/2)return {k:'label',si:h.si,key:h.key};}
+  for(let si=ANG.shapes.length-1;si>=0;si--){const s=ANG.shapes[si];for(const [a,b] of shapeSegs(s))if(segDist(p,s.p[a],s.p[b])<=tol*.8)return {k:'move',si};}
+  return null;
+}
+const angSnap=()=>JSON.stringify({flip:ANG.flip,shapes:ANG.shapes});
+function angPush(){ANG.hist.push(angSnap());if(ANG.hist.length>80)ANG.hist.shift();}
 function angDown(e){
-  e.preventDefault();const cv=e.currentTarget;try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  e.preventDefault();try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}
   const p=angPt(e);ANG.ptr=p;
-  if(!ANG.cur){const h=angHit(p);if(h){ANG.drag=h;angDraw();return;}ANG.cur={t:ANG.tool,p:[]};}
-  ANG.cur.p.push(p);ANG.drag=['cur',ANG.cur.p.length-1];angDraw();
+  if(ANG.mode==='cal'){const h=angHitTest(p),s=h&&ANG.shapes[h.si];ANG.mode=null;angButtons();angHint();
+    if(s&&s.t==='line')angCalibrate(h.si);else toast('Toca una línea ya dibujada para calibrar.',1);return;}
+  if(ANG.cur){ANG.cur.p.push(p);ANG.drag={k:'cur',pi:ANG.cur.p.length-1};angHint();angDraw();return;}
+  const h=angHitTest(p);
+  if(h){angPush();const s=ANG.shapes[h.si];
+    if(h.k==='move')h.last=p;
+    if(h.k==='label'){s.lo=s.lo||{};h.start=p;h.orig=(s.lo[h.key]||[0,0]).slice();}
+    ANG.drag=h;angDraw();return;}
+  ANG.cur={t:ANG.tool,p:[p]};
+  if(ANG.tool==='angle'){ANG.cur.o='v';ANG.cur.c=ANG_PAL[ANG.shapes.filter(s=>s.t==='angle').length%ANG_PAL.length];}
+  if(ANG.tool==='line')ANG.cur.c=LINE_COL;
+  ANG.drag={k:'cur',pi:0};angHint();angDraw();
 }
 function angMove(e){
-  const p=angPt(e);ANG.ptr=p;
-  if(ANG.drag){const [si,k]=ANG.drag;const s=si==='cur'?ANG.cur:ANG.shapes[si];if(s)s.p[k]=p;if(si!=='cur')angList();}
+  const p=angPt(e),d=ANG.drag;ANG.ptr=p;
+  if(d){
+    if(d.k==='cur'){if(ANG.cur)ANG.cur.p[d.pi]=p;}
+    else{const s=ANG.shapes[d.si];if(s){
+      if(d.k==='pt')s.p[d.pi]=p;
+      else if(d.k==='move'){const dx=p[0]-d.last[0],dy=p[1]-d.last[1];s.p=s.p.map(q=>[q[0]+dx,q[1]+dy]);d.last=p;}
+      else if(d.k==='label')s.lo[d.key]=[d.orig[0]+p[0]-d.start[0],d.orig[1]+p[1]-d.start[1]];
+      angList();}}
+  }
   angDraw();
 }
 function angUp(){
   ANG.drag=null;
-  if(ANG.cur&&ANG.cur.p.length>=ANG_N[ANG.cur.t]){ANG.shapes.push(ANG.cur);ANG.cur=null;angList();}
-  angDraw();
+  if(ANG.cur&&ANG.cur.p.length>=ANG_N[ANG.cur.t]){angPush();ANG.shapes.push(ANG.cur);ANG.cur=null;angList();}
+  angHint();angDraw();
 }
-function angUndo(){if(ANG.cur&&ANG.cur.p.length){ANG.cur.p.pop();if(!ANG.cur.p.length)ANG.cur=null;}else ANG.shapes.pop();angList();angDraw();}
+function angUndo(){
+  if(ANG.cur){ANG.cur.p.pop();if(!ANG.cur.p.length)ANG.cur=null;}
+  else if(ANG.hist.length){const s=JSON.parse(ANG.hist.pop());ANG.flip=s.flip;ANG.shapes=s.shapes;}
+  angButtons();angHint();angList();angDraw();
+}
+function angMirror(){
+  angPush();ANG.flip=!ANG.flip;const mir=q=>[ANG.W-q[0],q[1]];
+  ANG.shapes.forEach(s=>{s.p=s.p.map(mir);if(s.lo)Object.values(s.lo).forEach(o=>o[0]*=-1);});
+  if(ANG.cur)ANG.cur.p=ANG.cur.p.map(mir);
+  angButtons();angList();angDraw();
+}
+function angCalStart(){
+  if(!ANG.shapes.some(s=>s.t==='line')){toast('Primero dibuja una línea sobre algo cuya medida conozcas (p. ej. la biela o una regla) y después pulsa Calibrar.',1);angSetTool('line');return;}
+  ANG.cur=null;ANG.mode=ANG.mode==='cal'?null:'cal';angButtons();angHint();angDraw();
+}
+function angCalibrate(si){
+  const s=ANG.shapes[si],v=prompt('Medida real de esta línea en cm:',s.cal?String(s.cal).replace('.',','):'');if(v===null)return;
+  const n=parseFloat(String(v).replace(',','.'));if(!(n>0))return toast('Medida no válida.',1);
+  angPush();ANG.shapes.forEach(x=>{if(x.t==='line')delete x.cal;});s.cal=n;angList();angDraw();
+  toast(`Calibrado: ${fmtCm(n)} = ${Math.round(dist(s.p[0],s.p[1]))} px de la imagen`);
+}
 function angClose(){$('#m-ang').classList.remove('on');ANG.img=null;ANG.ptr=null;}
 function angSave(){
   const im=CUR.imgs[ANG.i];if(!im)return angClose();ANG.cur=null;
-  if(!ANG.shapes.length){if(im.base)im.src=im.base;delete im.base;delete im.ann;}
+  if(!ANG.shapes.length&&!ANG.flip){if(im.base)im.src=im.base;delete im.base;delete im.ann;}
   else{
-    const c=document.createElement('canvas');c.width=ANG.W;c.height=ANG.H;angRender(c.getContext('2d'),angU(),false);
-    if(!im.base)im.base=im.src;im.ann=JSON.parse(JSON.stringify(ANG.shapes));im.src=c.toDataURL('image/jpeg',.9);
+    const c=document.createElement('canvas');c.width=ANG.W;c.height=ANG.H;angRender(c.getContext('2d'),angU(),{});
+    if(!im.base)im.base=im.src;im.ann={v:2,flip:ANG.flip,shapes:JSON.parse(JSON.stringify(ANG.shapes))};im.src=c.toDataURL('image/jpeg',.9);
   }
-  im.did=null;angClose();renderImgs();setDirty(true);scheduleDraft();
-  toast(ANG.shapes.length?`${ANG.shapes.length} medida(s) guardada(s) en «${im.cap||'imagen'}»`:'Imagen sin medidas');
+  const n=ANG.shapes.length;im.did=null;angClose();renderImgs();setDirty(true);scheduleDraft();
+  toast(n?`${n} medida(s) guardada(s) en «${im.cap||'imagen'}»`:ANG.flip?'Imagen guardada en espejo':'Imagen sin medidas');
 }
 
 /* ---------- conexión de botones ---------- */
 function bindCapture(){
   const m=LS.get('cam_mode');if(m&&[...$('#cam-mode').options].some(o=>o.value===m))$('#cam-mode').value=m;
+  if(LS.get('cam_grid')==='0')$('#cam-guides').checked=false;
   const d=LS.get('cam_dur');if(d&&[...$('#cam-dur').options].some(o=>o.value===d))$('#cam-dur').value=d;
   $('#cam-close').onclick=camClose;
   $('#cam-mode').onchange=()=>camStart();$('#cam-dev').onchange=()=>camStart();
-  $('#cam-rec').onclick=camRecord;$('#cam-guides').onchange=camGuides;
-  $$('#m-cam canvas.gd').forEach(cv=>cv.onpointerdown=camGuideClick);
+  $('#cam-rec').onclick=camRecord;$('#cam-guides').onchange=()=>{LS.set('cam_grid',$('#cam-guides').checked?'1':'0');camGuides();};
   $('#rev-slider').oninput=e=>{CAM.idx=+e.target.value;camDraw();};
   $$('[data-step]').forEach(b=>b.onclick=()=>camStep(+b.dataset.step));
   $('#rev-back').onclick=camBack;$('#rev-use').onclick=()=>camUse(false);$('#rev-use-ang').onclick=()=>camUse(true);
@@ -1881,8 +2039,10 @@ function bindCapture(){
   // ángulos
   const cv=$('#ang-canvas');cv.onpointerdown=angDown;cv.onpointermove=angMove;cv.onpointerup=angUp;cv.onpointercancel=angUp;
   cv.onpointerleave=()=>{if(!ANG.drag){ANG.ptr=null;angDraw();}};
-  $('#ang-t-angle').onclick=()=>angSetTool('angle');$('#ang-t-line').onclick=()=>angSetTool('line');
-  $('#ang-undo').onclick=angUndo;$('#ang-clear').onclick=()=>{if(ANG.shapes.length&&!confirm('¿Borrar todas las medidas de esta imagen?'))return;ANG.shapes=[];ANG.cur=null;angList();angDraw();};
+  $('#ang-t-angle').onclick=()=>angSetTool('angle');$('#ang-t-line').onclick=()=>angSetTool('line');$('#ang-t-bike').onclick=()=>angSetTool('bike');
+  $('#ang-cal').onclick=angCalStart;$('#ang-flip').onclick=angMirror;
+  $('#ang-grid').onclick=()=>{ANG.grid=!ANG.grid;LS.set('ang_grid',ANG.grid?'1':'0');angButtons();angDraw();};
+  $('#ang-undo').onclick=angUndo;$('#ang-clear').onclick=()=>{if(ANG.shapes.length&&!confirm('¿Borrar todas las medidas de esta imagen?'))return;angPush();ANG.shapes=[];ANG.cur=null;angList();angHint();angDraw();};
   $('#ang-cancel').onclick=angClose;$('#ang-save').onclick=angSave;
   window.addEventListener('resize',()=>{if($('#m-ang').classList.contains('on')){angFit();angDraw();}if(camOpenNow())camGuides();});
   document.addEventListener('keydown',e=>{
@@ -1894,7 +2054,7 @@ function bindCapture(){
     }
     if($('#m-ang').classList.contains('on')){
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();angUndo();}
-      else if(e.key==='Escape'&&ANG.cur){ANG.cur=null;angDraw();}
+      else if(e.key==='Escape'&&(ANG.cur||ANG.mode)){ANG.cur=null;ANG.mode=null;angButtons();angHint();angDraw();}
     }
   });
 }
