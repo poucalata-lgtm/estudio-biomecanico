@@ -569,6 +569,7 @@ const SECTIONS=[
   {k:'hip_txt',l:'Hipótesis biomecánica (texto del informe)',t:'textarea',x:1,w:3},
  ]},
  {id:'mod',title:'Modificaciones realizadas',custom:'mods'},
+ {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'medpost',title:'Medidas post',custom:'measpost'},
  {id:'capfin',title:'Capturas finales',custom:'capfin'},
  {id:'rec',title:'Recomendaciones',fields:[
@@ -627,6 +628,7 @@ const SIMPLE_SECTIONS=[
  {id:'capini',title:'Capturas iniciales',custom:'imgs_ini'},
  {id:'hip',title:'Hipótesis biomecánica',fields:[{k:'hip_txt',l:'Hipótesis biomecánica',t:'textarea',w:3,rows:6}]},
  {id:'mod',title:'Resumen de modificaciones realizadas',custom:'mods_s'},
+ {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'capfin',title:'Capturas pos',custom:'imgs_fin'},
  {id:'medpost',title:'Medidas finales',fields:[{k:'m_sil_alt_post',l:'Altura de sillín',t:'num',u:'cm',h:'Desde el centro del eje del pedalier hasta la parte superior del sillín en el ancho de 80 mm'},{k:'m_alc_post',l:'Alcance',t:'num',u:'cm',h:'Desde el ancho de 80 mm del sillín o su centro hasta el centro del tornillo de la dirección'}]},
  {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
@@ -798,6 +800,7 @@ function renderForm(){
     else if(s.custom==='mods_s') body=`<p class="note">Si dejas un texto vacío y la altura de sillín cambió, el informe genera la frase sola.</p><div class="grid">${MODS.filter(m=>m[0]!=='otros').map(([c,l])=>`<div class="f w3"><label>${esc(l)}</label><input type="text" data-k="mod_${c}" data-mod="${c}"></div>`).join('')}</div>`;
     else if(s.custom==='imgs_ini') body=imgsHTML('ini');
     else if(s.custom==='imgs_fin') body=imgsHTML('fin');
+    else if(s.custom==='imgs_mid') body=midHTML();
     else body=`${s.id==='antro'?'<p id="antro-warn" style="display:none;background:#fff2dc;color:#8a5200;border-radius:8px;padding:8px 10px;font-size:13px;margin:0 0 10px"></p>':''}${s.note&&!s.priv?`<p class="note">${esc(s.note)}</p>`:''}${s.priv?`<p class="note">${esc(s.note)}</p>`:''}<div class="grid">${s.fields.map(fieldHTML).join('')}</div>`;
     if(s.id==='bici') tag='<span class="tag priv">marca, modelo, talla y año no se exportan</span>';
     out.push(`<section class="card" id="s-${s.id}"><h2>${esc(s.title)} ${tag}</h2>${body}</section>`);
@@ -807,6 +810,7 @@ function renderForm(){
   if(!FORM_BOUND){$('#form').addEventListener('input',onInput);$('#form').addEventListener('change',onInput);FORM_BOUND=true;}
   $$('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m===MODE()));
   $$('[data-addimg]').forEach(b=>b.onclick=()=>{CUR.imgs.push({cap:'',src:'',ph:b.dataset.addimg});renderImgs();setDirty(true);});
+  $$('[data-addtake]').forEach(b=>b.onclick=addMidTake);
 }
 
 function onInput(e){
@@ -886,12 +890,23 @@ let imgTarget=null;
 function imgPairs(){
   const key=c=>(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|antes|despues)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
   const rows=[];const get=k=>{let r=rows.find(r=>r.k===k);if(!r){r={k,ini:[],fin:[]};rows.push(r);}return r;};
-  CUR.imgs.filter(i=>i.src).forEach(i=>get(key(i.cap))[imgPhase(i)].push(i));
-  const rank=k=>k==='90'?0:k==='180'?1:2; rows.sort((a,b)=>rank(a.k)-rank(b.k));
-  const out=[];rows.forEach(r=>{for(let j=0;j<Math.max(r.ini.length,r.fin.length);j++)out.push([r.ini[j]||null,r.fin[j]||null]);});return out;}
+  CUR.imgs.filter(i=>i.src&&imgPhase(i)!=='mid').forEach(i=>get(key(i.cap))[imgPhase(i)].push(i));
+  const rank=k=>/^90\b/.test(k)?0:/^180\b/.test(k)?1:2; rows.sort((a,b)=>rank(a.k)-rank(b.k));
+  const out=[];rows.forEach(r=>{for(let j=0;j<Math.max(r.ini.length,r.fin.length);j++)out.push([r.ini[j]||null,r.fin[j]||null]);});
+  const mids={};CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').forEach(i=>(mids[i.g||0]=mids[i.g||0]||[]).push(i));
+  Object.keys(mids).sort((a,b)=>a-b).forEach(g=>{const L=mids[g].sort((a,b)=>rank(key(a.cap))-rank(key(b.cap)));for(let j=0;j<L.length;j+=2)out.push([L[j],L[j+1]||null]);});
+  return out;}
 function imgPhase(im){return im.ph||(/final|post/i.test(im.cap||'')?'fin':'ini');}
+// Toma a la que pertenece una imagen: inicial, final o cada toma intermedia (mid:1, mid:2…). Cada toma usa su propia grabación.
+function takeOf(im){const ph=imgPhase(im);return ph==='mid'?'mid:'+(im.g||0):ph;}
+function midHTML(){return `<p class="note">Opcional: tras los primeros cambios, graba de nuevo y saca otra pareja 180 + 90 sin tocar las capturas iniciales. Puedes añadir tantas tomas como necesites; en el informe salen después de las parejas inicial/final.</p><div class="imgs" id="imgs-mid"></div><div style="margin-top:10px"><button class="btn sm" data-addtake="1">＋ Nueva toma intermedia (180 + 90)</button></div>`;}
+function addMidTake(){
+  const n=Math.max(0,...CUR.imgs.filter(im=>imgPhase(im)==='mid').map(im=>im.g||0))+1;
+  CUR.imgs.push({cap:`180 ajuste ${n}`,src:'',ph:'mid',g:n},{cap:`90 ajuste ${n}`,src:'',ph:'mid',g:n});
+  renderImgs();setDirty(true);scheduleDraft();toast(`Toma intermedia ${n} añadida: usa 📷 Cámara en «180 ajuste ${n}» y la misma grabación te servirá para el 90`);
+}
 function renderImgs(){
-  ['ini','fin'].forEach(ph=>{
+  ['ini','mid','fin'].forEach(ph=>{
   const box=$('#imgs-'+ph); if(!box) return;
   box.innerHTML=CUR.imgs.map((im,i)=>imgPhase(im)!==ph?'':`<div class="slot">
      <div class="ph ${im.src?'has':''}" data-i="${i}" style="${im.src?`background-image:url(${im.src})`:''}">Clic para añadir imagen</div>
@@ -1607,8 +1622,8 @@ function camGuides(){$$('#m-cam canvas.gd').forEach(cv=>{
   if($('#cam-guides').checked)drawGrid(c,cv.width,cv.height,Math.max(1,Math.round(d*.8)),true);});}
 
 /* ---------- cámara en directo ---------- */
-// La grabación se reutiliza solo para el mismo estudio y la misma fase: las tomas finales necesitan otra grabación tras los cambios
-function camReusable(i){const im=CUR.imgs[i];return !!(CAM.frames.length&&CAM.caseId===CUR.id&&im&&imgPhase(im)===CAM.phase);}
+// La grabación se reutiliza solo para el mismo estudio y la misma toma (inicial, cada intermedia, final): cada toma necesita su grabación
+function camReusable(i){const im=CUR.imgs[i];return !!(CAM.frames.length&&CAM.caseId===CUR.id&&im&&takeOf(im)===CAM.phase);}
 async function camOpen(i){
   CAM.target=i;
   if(camReusable(i))return camReturn();   // la grabación de este estudio y de esta fase (inicial/final) sigue en memoria: se reutiliza
@@ -1675,7 +1690,7 @@ async function camRecord(){
   }catch(e){toast('Error al grabar: '+e.message,1);return;}
   finally{CAM.busy=false;btn.disabled=false;btn.textContent='● Grabar';}
   if(frames.length<2)return toast('No se capturaron fotogramas. Prueba otra vez.',1);
-  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=imgPhase(CUR.imgs[CAM.target]);camReview();
+  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camReview();
 }
 function camMeasure(fr){
   if(fr.length<2)return {fps:0,drop:0};const d=[];for(let k=1;k<fr.length;k++)d.push(fr[k].ts-fr[k-1].ts);
@@ -1715,7 +1730,7 @@ async function vidExtract(){
     btn.textContent='Procesando…';for(const f of frames){f.b=await f.p;delete f.p;}
   }finally{v.pause();v.playbackRate=1;CAM.busy=false;btn.disabled=false;btn.textContent='Extraer fotogramas';}
   if(frames.length<2)return toast('No se pudieron extraer fotogramas de ese tramo.',1);
-  CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=imgPhase(CUR.imgs[CAM.target]);camReview();
+  CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camReview();
 }
 
 /* ---------- visor fotograma a fotograma ---------- */
@@ -1727,10 +1742,10 @@ function camReview(){
     ` · la biela avanza ≈${fmt(m.fps?540/m.fps:0,1)}° entre fotogramas a 90 rpm`;
   camRenderSlots();camDraw();
 }
-// Un botón por cada hueco de la misma fase (p. ej. 180 inicial y 90 inicial): la misma grabación sirve para los dos
+// Un botón por cada hueco de la misma toma (p. ej. 180 inicial y 90 inicial): la misma grabación sirve para los dos
 function camRenderSlots(){
-  const tg=CUR.imgs[CAM.target],ph=tg?imgPhase(tg):'ini';
-  const L=CUR.imgs.map((im,i)=>[im,i]).filter(([im])=>imgPhase(im)===ph);
+  const tg=CUR.imgs[CAM.target],ph=tg?takeOf(tg):'ini';
+  const L=CUR.imgs.map((im,i)=>[im,i]).filter(([im])=>takeOf(im)===ph);
   $('#rev-slots').innerHTML=L.map(([im,i])=>{const u=CAM.used[i],cap=esc(im.cap||'imagen');
     return `<button class="btn${u===undefined?' pri':''}" data-use="${i}" title="Guarda este fotograma en «${cap}» y abre la herramienta de ángulos">${u!==undefined?'✓ ':''}Usar para «${cap}»${u!==undefined?` <small>(fot. ${u+1})</small>`:''}</button>`;}).join('');
   $$('#rev-slots [data-use]').forEach(b=>b.onclick=()=>camUse(+b.dataset.use));
@@ -1762,7 +1777,7 @@ function camStep(n){if(!CAM.frames.length)return;CAM.idx=Math.max(0,Math.min(CAM
 async function camUse(i){   // guarda el fotograma en el hueco i y abre Ángulos; la grabación sigue en memoria para elegir el otro
   const f=CAM.frames[CAM.idx],im=CUR.imgs[i];if(!f||!im)return;
   im.src=await blobToDataURL(f.b);im.did=null;delete im.base;delete im.ann;CAM.used[i]=CAM.idx;
-  const ph=imgPhase(im),next=CUR.imgs.findIndex((o,k)=>imgPhase(o)===ph&&CAM.used[k]===undefined);CAM.target=next>=0?next:i;   // la toma pendiente queda como destino de Intro
+  const ph=takeOf(im),next=CUR.imgs.findIndex((o,k)=>takeOf(o)===ph&&CAM.used[k]===undefined);CAM.target=next>=0?next:i;   // la toma pendiente queda como destino de Intro
   $('#m-cam').classList.remove('on');renderImgs();setDirty(true);scheduleDraft();
   toast(`Fotograma ${CAM.idx+1} guardado en «${im.cap||'imagen'}»`);angOpen(i);
 }
