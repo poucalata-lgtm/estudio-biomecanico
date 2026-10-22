@@ -274,7 +274,7 @@ body.pdfcap .repwrap{display:block;padding:0}
     </div>
     <div class="dbbox" id="xl-local">
       <h2>Base de datos de investigación (Excel)</h2>
-      <p class="note" style="margin-bottom:10px">El Excel solo recibe datos <b>pseudonimizados</b>: código de estudio, sin nombre, teléfono, email ni modelo de bici. Solo se registran estudios con el consentimiento de investigación marcado. Hojas: <i>Datos</i> (1 fila por estudio, incluye los ángulos de las capturas 90/180 pre y post), <i>Molestias</i>, <i>Modificaciones</i> y <i>Capturas</i> (formato largo: todas las medidas de todas las capturas, también las intermedias) y <i>Diccionario</i> de variables.</p>
+      <p class="note" style="margin-bottom:10px">El Excel solo recibe datos <b>pseudonimizados</b>: código de estudio, sin nombre, teléfono, email ni modelo de bici. Solo se registran estudios con el consentimiento de investigación marcado. Hojas: <i>Datos</i> (1 fila por estudio, incluye los ángulos de las capturas 90/180 pre y post), <i>Molestias</i>, <i>Modificaciones</i> y <i>Capturas</i> (formato largo: todas las medidas de las capturas pre y post) y <i>Diccionario</i> de variables.</p>
       <div class="row">
         <button class="btn" id="b-link">Vincular Excel existente…</button>
         <button class="btn" id="b-create">Crear Excel nuevo…</button>
@@ -529,6 +529,7 @@ const SECTIONS=[
   {k:'alt_troc',l:'Altura trocantérea',t:'num',u:'cm',x:1,h:'Trocánter mayor – suelo, de pie, descalzo'},
   {k:'alt_tibial',l:'Altura tibial',t:'num',u:'cm',x:1,h:'Interlínea articular de rodilla (lateral) – suelo, de pie, descalzo'},
   {k:'femur',l:'Fémur (calculado)',t:'calc',u:'cm',x:1,h:'Altura trocantérea − altura tibial'},
+  {k:'femur_marc',l:'Fémur entre marcadores en la bici (trocánter – rodilla)',t:'num',u:'cm',x:1,h:'Se pide al dibujar el modelo Bici; da la escala para el KOPS en mm'},
   {k:'ratio_femur_tibia',l:'Ratio fémur / altura tibial',t:'calc',u:'',x:1,h:'Calculado'},
   {k:'brazo',l:'Longitud de brazo (opcional)',t:'num',u:'cm',x:1,h:'Acromion – estiloides radial'},
   {k:'antebrazo',l:'Longitud de antebrazo (opcional)',t:'num',u:'cm',x:1,h:'Epicóndilo lateral – estiloides radial'},
@@ -1136,16 +1137,16 @@ const CAP_MEAS=[['tronco','Tronco respecto a la horizontal','°'],['lumbar','Lum
   ['cuello','Cuello (0 = cabeza alineada con el tronco; + extensión; − flexión)','°'],['hombro','Hombro (ángulo interior trocánter–hombro–codo)','°'],
   ['codo','Codo (ángulo interior hombro–codo–mano)','°'],['cadera','Cadera (ángulo interior hombro–trocánter–rodilla)','°'],
   ['rodilla','Rodilla (ángulo interior trocánter–rodilla–tobillo)','°'],['tobillo','Tobillo (línea tobillo–rodilla vs línea calcáneo–pie, vértice en el calcáneo)','°'],
-  ['pie','Pie (línea pie–calcáneo vs horizontal; + calcáneo más alto que el pie)','°'],['kops','KOPS (rodilla respecto a la vertical de la puntera; + por delante; solo si la imagen está calibrada)','cm']];
+  ['pie','Pie (línea pie–calcáneo vs horizontal; + calcáneo más alto que el pie)','°'],['kops','KOPS (rodilla respecto a la vertical de la puntera; + rodilla por delante, − por detrás; escala con el fémur entre marcadores)','mm']];
 const r1x=x=>x===null||x===undefined||!isFinite(x)?null:Math.round(x*10)/10;
 function capPos(cap){const m=(cap||'').match(/\b(90|180)\b/);if(m)return m[1];
   return (cap||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|ajuste)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim()||'otra';}
 function capScale(shapes){const s=shapes.find(s=>s.t==='line'&&s.cal>0&&s.p.length===2);return s?dist(s.p[0],s.p[1])/s.cal:0;}
 // Todas las medidas de una imagen: modelo Bici, ángulos y líneas
-function capMeasures(im){
+function capMeasures(im,fem){
   const shapes=annShapes(im),sc=capScale(shapes),out=[];let na=0,nl=0;
   shapes.forEach(s=>{
-    if(s.t==='bike')bikeMeasures(s,sc).forEach(m=>{if(m.val!==null)out.push({tool:'bici',medida:m.key,valor:r1x(m.val),unidad:m.cm?'cm':'°'});});
+    if(s.t==='bike')bikeMeasures(s,sc,fem).forEach(m=>{if(m.val!==null)out.push({tool:'bici',medida:m.key,valor:r1x(m.val),unidad:m.mm?'mm':'°'});});
     else if(s.t==='angle'&&s.p.length===3){na++;const d=s.o==='v'?angDeg(s.p[1],s.p[0],s.p[2]):angDeg(s.p[0],s.p[1],s.p[2]);out.push({tool:'angulo',medida:'angulo_'+na,valor:r1x(d),unidad:'°'});}
     else if(s.t==='line'&&s.p.length===2){nl++;out.push({tool:'linea',medida:`linea_${nl}_inclinacion`,valor:r1x(lineDeg(s.p[0],s.p[1])),unidad:'°'});
       if(s.cal)out.push({tool:'linea',medida:`linea_${nl}_referencia`,valor:r1x(s.cal),unidad:'cm'});
@@ -1155,14 +1156,14 @@ function capMeasures(im){
 }
 // Columnas anchas: medidas del modelo Bici en las capturas 90 y 180, pre (iniciales) y post (finales)
 function capWide(cs){
-  const R={},imgs=cs.imgs||[];
+  const R={},imgs=cs.imgs||[],fem=num(cs.v&&cs.v.femur_marc)||0;
   const get=(ph,pos)=>{const im=imgs.find(im=>im.src&&imgPhase(im)===ph&&capPos(im.cap)===pos&&annShapes(im).some(s=>s.t==='bike'));if(!im)return {};
-    const sh=annShapes(im),b=sh.find(s=>s.t==='bike');return Object.fromEntries(bikeMeasures(b,capScale(sh)).map(m=>[m.key,r1x(m.val)]));};
+    const sh=annShapes(im),b=sh.find(s=>s.t==='bike');return Object.fromEntries(bikeMeasures(b,capScale(sh),fem).map(m=>[m.key,r1x(m.val)]));};
   ['90','180'].forEach(pos=>{const pre=get('ini',pos),post=get('fin',pos);
     CAP_MEAS.forEach(([k])=>{const a=pre[k]??null,b=post[k]??null;R[`cap${pos}_${k}_pre`]=a;R[`cap${pos}_${k}_post`]=b;R[`cap${pos}_${k}_delta`]=a!==null&&b!==null?r1x(b-a):null;});});
   return R;
 }
-const CAP_HEAD=['id','fase','toma','posicion','herramienta','medida','valor','unidad','sexo','edad','bici_tipo'];
+const CAP_HEAD=['id','fase','posicion','herramienta','medida','valor','unidad','sexo','edad','bici_tipo'];
 const FIELDS_DYN={o:[['RETUL','Retül 3D'],['VID2D','Vídeo 2D'],['VICON','Vicon'],['OTR','Otro']]};
 const FIELDS_COMP={o:[['SILLIN','Sillín'],['POTENCIA','Potencia'],['MANILLAR','Manillar'],['BIELAS','Bielas'],['CALAS','Calas nuevas'],['PEDALES','Pedales'],['PLANTILLAS','Plantillas'],['CUNAS','Cuñas'],['SUPL','Suplementos'],['ACOPLE','Acoples']]};
 
@@ -1213,8 +1214,8 @@ function longRows(cs,row){
   MODS.forEach(([c,l])=>{ if(!row[`mod_${c}`]) return;
     const rel=MODS.find(m=>m[0]===c)[2].map(mc=>{const d=row[`m_${mc}_delta`];return d!==null&&d!==0?`${mc}:${d}`:null}).filter(Boolean).join(' | ');
     mods.push({id:cs.id,modificacion:c,modificacion_nombre:l,descripcion:row[`mod_${c}_txt`],deltas:rel||null});});
-  const caps=[];(cs.imgs||[]).forEach(im=>{if(!im.src)return;const ph=imgPhase(im),fase=ph==='ini'?'pre':ph==='fin'?'post':'intermedia';
-    capMeasures(im).forEach(m=>caps.push({id:cs.id,fase,toma:ph==='mid'?(im.g||null):null,posicion:capPos(im.cap),herramienta:m.tool,medida:m.medida,valor:m.valor,unidad:m.unidad,sexo:row.sexo,edad:row.edad,bici_tipo:row.bici_tipo}));});
+  const caps=[],fem=num(v.femur_marc)||0;(cs.imgs||[]).forEach(im=>{const ph=imgPhase(im);if(!im.src||ph==='mid')return;   // solo pre y post: las tomas intermedias no van al Excel
+    capMeasures(im,fem).forEach(m=>caps.push({id:cs.id,fase:ph==='ini'?'pre':'post',posicion:capPos(im.cap),herramienta:m.tool,medida:m.medida,valor:m.valor,unidad:m.unidad,sexo:row.sexo,edad:row.edad,bici_tipo:row.bici_tipo}));});
   return {pain,mods,caps};
 }
 
@@ -1859,8 +1860,10 @@ function annCount(im){return annShapes(im).length;}
 /* ---------- modelo Bici: medidas ---------- */
 const bikePts=s=>Object.fromEntries(BIKE_PTS.slice(0,s.p.length).map((b,k)=>[b[0],s.p[k]]));
 function bikeFacing(P){if(P.mano&&P.troc)return P.mano[0]>=P.troc[0]?1:-1;if(P.puntera&&P.talon)return P.puntera[0]>=P.talon[0]?1:-1;if(P.hombro&&P.troc)return P.hombro[0]>=P.troc[0]?1:-1;return 1;}
-function bikeMeasures(s,sc){   // sc = px por cm; si no se pasa, la calibración de la imagen abierta
-  const P=bikePts(s),f=bikeFacing(P),out=[];if(sc===undefined)sc=angScale();
+// Fémur entre marcadores (trocánter–rodilla) del estudio abierto, en cm: da la escala del KOPS
+function caseFemur(){const n=CUR&&CUR.v?num(CUR.v.femur_marc):null;return n&&n>0?n:0;}
+function bikeMeasures(s,sc,fem){   // sc = px por cm de una línea calibrada; fem = fémur entre marcadores (cm)
+  const P=bikePts(s),f=bikeFacing(P),out=[];if(sc===undefined)sc=angScale();if(fem===undefined)fem=caseFemur();
   // Vectores en un sistema "mirando a la derecha y con el eje Y hacia arriba", así los signos no dependen del lado de la foto
   const V=(a,b)=>[f*(b[0]-a[0]),-(b[1]-a[1])],cr=(u,v)=>u[0]*v[1]-u[1]*v[0],dt=(u,v)=>u[0]*v[0]+u[1]*v[1];
   const add=(key,lab,val,signed,x)=>out.push(Object.assign({key,lab,val,signed,col:BIKE_COL[key]},x||{}));
@@ -1876,11 +1879,14 @@ function bikeMeasures(s,sc){   // sc = px por cm; si no se pasa, la calibración
   if(P.rodilla&&P.tobillo&&P.talon&&P.puntera){   // línea rodilla–tobillo frente a línea talón–puntera, con vértice en el calcáneo
     const sh=[P.talon[0]+P.rodilla[0]-P.tobillo[0],P.talon[1]+P.rodilla[1]-P.tobillo[1]];add('tobillo','Tobillo',angDeg(sh,P.talon,P.puntera));}
   if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // desde la puntera respecto a la horizontal; + = talón más alto que la puntera
-  if(P.rodilla&&P.puntera)add('kops','KOPS',sc?f*(P.rodilla[0]-P.puntera[0])/sc:null,true,{cm:true});      // + = rodilla por delante de la vertical
+  if(P.rodilla&&P.puntera){   // en mm; + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla
+    const ks=fem>0&&P.troc?dist(P.troc,P.rodilla)/fem:sc;   // px por cm: con el fémur entre marcadores (preferente) o con una línea calibrada
+    add('kops','KOPS',ks?f*(P.rodilla[0]-P.puntera[0])/ks*10:null,true,{mm:true});}
   return out;
 }
-const measShort=m=>m.cm?(m.val===null?'KOPS':'KOPS '+(m.val>=0?'+':'')+fmtCm(m.val)):m.lab+' '+fmtDeg(m.val,m.signed);
-const measLong=m=>m.cm?(m.val===null?'KOPS: calibra una línea para ver la distancia':'KOPS '+(m.val>=0?'+':'')+fmtCm(m.val)+(m.val>=0?' (rodilla por delante)':' (rodilla por detrás)')):m.lab+' '+fmtDeg(m.val,m.signed);
+const fmtMm=x=>{const r=Math.round(x)||0;return (r>0?'+':'')+r.toLocaleString('es-ES').replace('-','−')+' mm';};
+const measShort=m=>m.mm?(m.val===null?'KOPS (falta fémur)':'KOPS '+fmtMm(m.val)):m.lab+' '+fmtDeg(m.val,m.signed);
+const measLong=m=>m.mm?(m.val===null?'KOPS: introduce el fémur entre marcadores para calcularlo':'KOPS '+fmtMm(m.val)+(m.val>=0?' (rodilla por delante de la vertical)':' (rodilla por detrás de la vertical)')):m.lab+' '+fmtDeg(m.val,m.signed);
 function lineText(s,sc,long){const L=dist(s.p[0],s.p[1]),d=fmtDeg(lineDeg(s.p[0],s.p[1]))+(long?' vs horizontal':'');
   if(s.cal)return fmtCm(s.cal)+(long?' (referencia de calibración)':' (ref.)')+' · '+d;return d+(sc?' · '+fmtCm(L/sc):'');}
 
@@ -2001,11 +2007,12 @@ function angList(){
   const L=ANG.shapes.map((s,k)=>{
     if(s.t==='angle')return it(s.c,`${k+1}. Ángulo: <b>${fmtDeg(angDeg(s.p[1],s.p[0],s.p[2]))}</b>`,k);
     if(s.t==='line')return it(s.c||LINE_COL,`${k+1}. Línea: <b>${esc(lineText(s,sc,true))}</b>`,k);
-    return `<span class="it bike"><b>${k+1}. Bici</b>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
+    return `<span class="it bike"><b>${k+1}. Bici</b><button class="btn sm" data-femur="1" title="Longitud del fémur entre marcadores (trocánter – rodilla); da la escala del KOPS">Fémur: ${caseFemur()?fmtCm(caseFemur()):'—'} ✎</button>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
   });
-  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo entre la línea tobillo–rodilla y la línea calcáneo (talón)–pie (puntera), con vértice en el calcáneo. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS + = rodilla por delante de la vertical de la puntera. El resto, ángulo interior entre segmentos.</p>':'';
+  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo entre la línea tobillo–rodilla y la línea calcáneo (talón)–pie (puntera), con vértice en el calcáneo. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS en mm: + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla (escala con el fémur entre marcadores). El resto, ángulo interior entre segmentos.</p>':'';
   $('#ang-list').innerHTML=(L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>')+bikeNote;
   $$('[data-angdel]').forEach(b=>b.onclick=()=>{angPush();ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
+  $$('[data-femur]').forEach(b=>b.onclick=angAskFemur);
 }
 function angButtons(){
   ['angle','line','bike'].forEach(t=>$('#ang-t-'+t).classList.toggle('on',ANG.tool===t&&ANG.mode!=='cal'));
@@ -2069,8 +2076,21 @@ function angMove(e){
 }
 function angUp(){
   ANG.drag=null;
-  if(ANG.cur&&ANG.cur.p.length>=ANG_N[ANG.cur.t]){angPush();ANG.shapes.push(ANG.cur);ANG.cur=null;angList();}
+  if(ANG.cur&&ANG.cur.p.length>=ANG_N[ANG.cur.t]){const done=ANG.cur;angPush();ANG.shapes.push(done);ANG.cur=null;angList();
+    if(done.t==='bike'&&!caseFemur())setTimeout(angAskFemur,80);}   // primera vez: pedir el fémur para poder calcular el KOPS
   angHint();angDraw();
+}
+function angAskFemur(){
+  const v=CUR.v,def=num(v.femur_marc)||CALCS.femur(v)||'';let msg='Longitud del fémur entre marcadores (trocánter – rodilla), en cm.\nSe usa para calcular el KOPS en mm en todas las capturas de este estudio.';
+  for(;;){
+    const t=prompt(msg,def?String(def).replace('.',','):'');
+    if(t===null){if(!caseFemur())toast('Sin el fémur no se puede calcular el KOPS. Puedes introducirlo luego con el botón «Fémur» de la lista de medidas.',1);return;}
+    const n=parseFloat(String(t).replace(',','.'));
+    if(n>=15&&n<=80){v.femur_marc=String(Math.round(n*10)/10).replace('.',',');break;}
+    msg='Medida no válida. Escribe la longitud del fémur en cm (por ejemplo 42,5):';
+  }
+  const el=document.querySelector('[data-k="femur_marc"]');if(el)el.value=v.femur_marc;
+  setDirty(true);scheduleDraft();angList();angDraw();toast(`Fémur ${fmtCm(caseFemur())}: KOPS calculado en mm`);
 }
 function angUndo(){
   if(ANG.cur){ANG.cur.p.pop();if(!ANG.cur.p.length)ANG.cur=null;}
