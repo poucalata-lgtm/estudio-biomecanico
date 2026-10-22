@@ -274,7 +274,7 @@ body.pdfcap .repwrap{display:block;padding:0}
     </div>
     <div class="dbbox" id="xl-local">
       <h2>Base de datos de investigación (Excel)</h2>
-      <p class="note" style="margin-bottom:10px">El Excel solo recibe datos <b>pseudonimizados</b>: código de estudio, sin nombre, teléfono, email ni modelo de bici. Solo se registran estudios con el consentimiento de investigación marcado. Hojas: <i>Datos</i> (1 fila por estudio), <i>Molestias</i> y <i>Modificaciones</i> (formato largo) y <i>Diccionario</i> de variables.</p>
+      <p class="note" style="margin-bottom:10px">El Excel solo recibe datos <b>pseudonimizados</b>: código de estudio, sin nombre, teléfono, email ni modelo de bici. Solo se registran estudios con el consentimiento de investigación marcado. Hojas: <i>Datos</i> (1 fila por estudio, incluye los ángulos de las capturas 90/180 pre y post), <i>Molestias</i>, <i>Modificaciones</i> y <i>Capturas</i> (formato largo: todas las medidas de todas las capturas, también las intermedias) y <i>Diccionario</i> de variables.</p>
       <div class="row">
         <button class="btn" id="b-link">Vincular Excel existente…</button>
         <button class="btn" id="b-create">Crear Excel nuevo…</button>
@@ -475,7 +475,7 @@ const SECTIONS=[
  {id:'bici',title:'Bicicleta',fields:[
   {k:'bici_tipo',l:'Tipo',t:'select',x:1,o:[['CAR','Carretera'],['GRA','Gravel'],['MTB','MTB'],['TRI','Triatlón / CRI'],['URB','Urbana / e-bike'],['OTR','Otra']]},
   {k:'bici_num',l:'Nº de bici de este ciclista',t:'num',x:0,h:'1 = la primera bici que nos trae; 2 = la segunda; 3 = la tercera…'},
-  {k:'cod_inf',l:'Código del informe (calculado)',t:'calc',x:0,w:2,h:'BIO + iniciales + tipo de bici + nº de bici. Sustituye al nombre en el informe y en el PDF'},
+  {k:'cod_inf',l:'Código del informe (calculado)',t:'calc',x:0,w:2},
   {k:'bici_marca',l:'Marca',t:'text',x:0},
   {k:'bici_modelo',l:'Modelo',t:'text',x:0},
   {k:'bici_talla',l:'Talla',t:'text',x:0},
@@ -564,12 +564,12 @@ const SECTIONS=[
   {k:'consent',l:'El/la ciclista consiente el uso de sus datos, de forma anonimizada, con fines de investigación',t:'check',x:0,w:3},
  ]},
  {id:'capini',title:'Capturas iniciales',custom:'capini'},
+ {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'hip',title:'Hipótesis biomecánica',fields:[
   {k:'hip',l:'Hallazgos — para análisis',t:'multi',x:1,w:3,o:[['SBAJO','Sillín bajo'],['SALTO','Sillín alto'],['SADEL','Sillín adelantado'],['SRET','Sillín retrasado'],['SINC','Inclinación de sillín'],['ALARGO','Alcance largo'],['ACORTO','Alcance corto'],['DROPX','Drop excesivo'],['DROPC','Drop insuficiente'],['ALIN','Alineación rodilla-pie'],['CALA','Rotación / posición de cala'],['ASIM','Asimetría funcional'],['MOVL','Limitación de movilidad'],['PRES','Presión en zona de apoyo']]},
   {k:'hip_txt',l:'Hipótesis biomecánica (texto del informe)',t:'textarea',x:1,w:3},
  ]},
  {id:'mod',title:'Modificaciones realizadas',custom:'mods'},
- {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'medpost',title:'Medidas post',custom:'measpost'},
  {id:'capfin',title:'Capturas finales',custom:'capfin'},
  {id:'rec',title:'Recomendaciones',fields:[
@@ -626,9 +626,9 @@ const SIMPLE_SECTIONS=[
  {id:'cons',title:'Consentimiento',fields:['consent']},
  {id:'medpre',title:'Medidas pre-estudio',fields:[{k:'m_sil_alt_pre',l:'Altura de sillín',t:'num',u:'cm',h:'Desde el centro del eje del pedalier hasta la parte superior del sillín en el ancho de 80 mm'},{k:'m_alc_pre',l:'Alcance',t:'num',u:'cm',h:'Desde el ancho de 80 mm del sillín o su centro hasta el centro del tornillo de la dirección'}]},
  {id:'capini',title:'Capturas iniciales',custom:'imgs_ini'},
+ {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'hip',title:'Hipótesis biomecánica',fields:[{k:'hip_txt',l:'Hipótesis biomecánica',t:'textarea',w:3,rows:6}]},
  {id:'mod',title:'Resumen de modificaciones realizadas',custom:'mods_s'},
- {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
  {id:'capfin',title:'Capturas pos',custom:'imgs_fin'},
  {id:'medpost',title:'Medidas finales',fields:[{k:'m_sil_alt_post',l:'Altura de sillín',t:'num',u:'cm',h:'Desde el centro del eje del pedalier hasta la parte superior del sillín en el ancho de 80 mm'},{k:'m_alc_post',l:'Alcance',t:'num',u:'cm',h:'Desde el ancho de 80 mm del sillín o su centro hasta el centro del tornillo de la dirección'}]},
  {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
@@ -1103,6 +1103,7 @@ function buildColumns(){
       add('dyn_sistema','Sistema de captura dinámica','',FIELDS_DYN.o.map(o=>o.join('=')).join('; '),s.title);
       DYN.forEach(([c,l,u])=>['i','d'].forEach(sd=>{const L=sd==='i'?'izda':'dcha';
         add(`r_${c}_${sd}_pre`,`${l} ${L} pre`,u,'',s.title);add(`r_${c}_${sd}_post`,`${l} ${L} post`,u,'',s.title);add(`r_${c}_${sd}_delta`,`${l} ${L} Δ`,u,'',s.title);}));
+      ['90','180'].forEach(pos=>CAP_MEAS.forEach(([k,l,u])=>{add(`cap${pos}_${k}_pre`,`Captura ${pos} pre – ${l}`,u,'',CAP_SEC);add(`cap${pos}_${k}_post`,`Captura ${pos} post – ${l}`,u,'',CAP_SEC);add(`cap${pos}_${k}_delta`,`Captura ${pos} – ${l.split(' (')[0]} Δ (post − pre)`,u,'',CAP_SEC);}));
       return;
     }
     if(s.custom==='mods'){
@@ -1129,6 +1130,39 @@ function buildColumns(){
   add('consent','Consentimiento de investigación','0/1','','Meta');
   return C;
 }
+/* ---------- Ángulos medidos sobre las capturas (herramienta de ángulos) ---------- */
+const CAP_SEC='Ángulos en capturas (herramienta Bici)';
+const CAP_MEAS=[['tronco','Tronco respecto a la horizontal','°'],['lumbar','Lumbar (0 = trocánter, L5 y hombro alineados; + flexión; − anteversión)','°'],
+  ['cuello','Cuello (0 = cabeza alineada con el tronco; + extensión; − flexión)','°'],['hombro','Hombro (ángulo interior trocánter–hombro–codo)','°'],
+  ['codo','Codo (ángulo interior hombro–codo–mano)','°'],['cadera','Cadera (ángulo interior hombro–trocánter–rodilla)','°'],
+  ['rodilla','Rodilla (ángulo interior trocánter–rodilla–tobillo)','°'],['tobillo','Tobillo (línea tobillo–rodilla vs línea calcáneo–pie, vértice en el calcáneo)','°'],
+  ['pie','Pie (línea pie–calcáneo vs horizontal; + calcáneo más alto que el pie)','°'],['kops','KOPS (rodilla respecto a la vertical de la puntera; + por delante; solo si la imagen está calibrada)','cm']];
+const r1x=x=>x===null||x===undefined||!isFinite(x)?null:Math.round(x*10)/10;
+function capPos(cap){const m=(cap||'').match(/\b(90|180)\b/);if(m)return m[1];
+  return (cap||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|ajuste)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim()||'otra';}
+function capScale(shapes){const s=shapes.find(s=>s.t==='line'&&s.cal>0&&s.p.length===2);return s?dist(s.p[0],s.p[1])/s.cal:0;}
+// Todas las medidas de una imagen: modelo Bici, ángulos y líneas
+function capMeasures(im){
+  const shapes=annShapes(im),sc=capScale(shapes),out=[];let na=0,nl=0;
+  shapes.forEach(s=>{
+    if(s.t==='bike')bikeMeasures(s,sc).forEach(m=>{if(m.val!==null)out.push({tool:'bici',medida:m.key,valor:r1x(m.val),unidad:m.cm?'cm':'°'});});
+    else if(s.t==='angle'&&s.p.length===3){na++;const d=s.o==='v'?angDeg(s.p[1],s.p[0],s.p[2]):angDeg(s.p[0],s.p[1],s.p[2]);out.push({tool:'angulo',medida:'angulo_'+na,valor:r1x(d),unidad:'°'});}
+    else if(s.t==='line'&&s.p.length===2){nl++;out.push({tool:'linea',medida:`linea_${nl}_inclinacion`,valor:r1x(lineDeg(s.p[0],s.p[1])),unidad:'°'});
+      if(s.cal)out.push({tool:'linea',medida:`linea_${nl}_referencia`,valor:r1x(s.cal),unidad:'cm'});
+      else if(sc)out.push({tool:'linea',medida:`linea_${nl}_longitud`,valor:r1x(dist(s.p[0],s.p[1])/sc),unidad:'cm'});}
+  });
+  return out;
+}
+// Columnas anchas: medidas del modelo Bici en las capturas 90 y 180, pre (iniciales) y post (finales)
+function capWide(cs){
+  const R={},imgs=cs.imgs||[];
+  const get=(ph,pos)=>{const im=imgs.find(im=>im.src&&imgPhase(im)===ph&&capPos(im.cap)===pos&&annShapes(im).some(s=>s.t==='bike'));if(!im)return {};
+    const sh=annShapes(im),b=sh.find(s=>s.t==='bike');return Object.fromEntries(bikeMeasures(b,capScale(sh)).map(m=>[m.key,r1x(m.val)]));};
+  ['90','180'].forEach(pos=>{const pre=get('ini',pos),post=get('fin',pos);
+    CAP_MEAS.forEach(([k])=>{const a=pre[k]??null,b=post[k]??null;R[`cap${pos}_${k}_pre`]=a;R[`cap${pos}_${k}_post`]=b;R[`cap${pos}_${k}_delta`]=a!==null&&b!==null?r1x(b-a):null;});});
+  return R;
+}
+const CAP_HEAD=['id','fase','toma','posicion','herramienta','medida','valor','unidad','sexo','edad','bici_tipo'];
 const FIELDS_DYN={o:[['RETUL','Retül 3D'],['VID2D','Vídeo 2D'],['VICON','Vicon'],['OTR','Otro']]};
 const FIELDS_COMP={o:[['SILLIN','Sillín'],['POTENCIA','Potencia'],['MANILLAR','Manillar'],['BIELAS','Bielas'],['CALAS','Calas nuevas'],['PEDALES','Pedales'],['PLANTILLAS','Plantillas'],['CUNAS','Cuñas'],['SUPL','Suplementos'],['ACOPLE','Acoples']]};
 
@@ -1147,7 +1181,7 @@ function anonRow(cs){
       R.mol_n=n;R.mol_eva_max_pre=mxp;R.mol_eva_max_seg=mxs;R.mol_eva_max_cambio=mxp!==null&&mxs!==null?mxs-mxp:null;
       R.mol_bici_txt=nz(v.mol_bici_txt);R.mol_dia_txt=nz(v.mol_dia_txt);return;}
     if(s.custom==='measpost'){MEAS.forEach(([c])=>{R[`m_${c}_pre`]=mv(v,c,'pre');R[`m_${c}_post`]=mv(v,c,'post');R[`m_${c}_delta`]=delta(c);});R.m_pot_signo_pre=nz(v.m_pot_signo_pre);R.m_pot_signo_post=nz(v.m_pot_signo_post);return;}
-    if(s.custom==='capini'){R.dyn_sistema=nz(v.dyn_sistema);DYN.forEach(([c])=>['i','d'].forEach(sd=>{R[`r_${c}_${sd}_pre`]=num(v[`r_${c}_pre_${sd}`]);R[`r_${c}_${sd}_post`]=num(v[`r_${c}_post_${sd}`]);R[`r_${c}_${sd}_delta`]=rdelta(c,sd);}));return;}
+    if(s.custom==='capini'){R.dyn_sistema=nz(v.dyn_sistema);DYN.forEach(([c])=>['i','d'].forEach(sd=>{R[`r_${c}_${sd}_pre`]=num(v[`r_${c}_pre_${sd}`]);R[`r_${c}_${sd}_post`]=num(v[`r_${c}_post_${sd}`]);R[`r_${c}_${sd}_delta`]=rdelta(c,sd);}));Object.assign(R,capWide(cs));return;}
     if(s.custom==='mods'){let n=0;MODS.forEach(([c])=>{const t=modText(c),dn=modDone(c);R[`mod_${c}`]=dn?1:0;R[`mod_${c}_txt`]=t||null;if(dn)n++;});R.n_mods=n;
       const any=FIELDS_COMP.o.some(o=>v[`comp__${o[0]}`]);FIELDS_COMP.o.forEach(o=>R[`comp_${o[0]}`]=v[`comp__${o[0]}`]?1:0);
       R.confort_post=num(v.confort_post);return;}
@@ -1179,21 +1213,23 @@ function longRows(cs,row){
   MODS.forEach(([c,l])=>{ if(!row[`mod_${c}`]) return;
     const rel=MODS.find(m=>m[0]===c)[2].map(mc=>{const d=row[`m_${mc}_delta`];return d!==null&&d!==0?`${mc}:${d}`:null}).filter(Boolean).join(' | ');
     mods.push({id:cs.id,modificacion:c,modificacion_nombre:l,descripcion:row[`mod_${c}_txt`],deltas:rel||null});});
-  return {pain,mods};
+  const caps=[];(cs.imgs||[]).forEach(im=>{if(!im.src)return;const ph=imgPhase(im),fase=ph==='ini'?'pre':ph==='fin'?'post':'intermedia';
+    capMeasures(im).forEach(m=>caps.push({id:cs.id,fase,toma:ph==='mid'?(im.g||null):null,posicion:capPos(im.cap),herramienta:m.tool,medida:m.medida,valor:m.valor,unidad:m.unidad,sexo:row.sexo,edad:row.edad,bici_tipo:row.bici_tipo}));});
+  return {pain,mods,caps};
 }
 
 /* Fusiona filas nuevas con el contenido de un libro existente (upsert por id) y devuelve un libro nuevo */
 function mergeWorkbook(existingWB, cases){
   const COLS=buildColumns(); const order=COLS.map(c=>c.col);
-  let datos=[],pain=[],mods=[];
+  let datos=[],pain=[],mods=[],caps=[];
   if(existingWB){
     const g=n=>existingWB.Sheets[n]?XLSX.utils.sheet_to_json(existingWB.Sheets[n],{defval:null}):[];
-    datos=g('Datos');pain=g('Molestias');mods=g('Modificaciones');
+    datos=g('Datos');pain=g('Molestias');mods=g('Modificaciones');caps=g('Capturas');
   }
   cases.forEach(cs=>{
-    const row=anonRow(cs); const {pain:p,mods:m}=longRows(cs,row);
+    const row=anonRow(cs); const {pain:p,mods:m,caps:k}=longRows(cs,row);
     const i=datos.findIndex(r=>r.id===cs.id); if(i>=0) datos[i]=row; else datos.push(row);
-    pain=pain.filter(r=>r.id!==cs.id).concat(p); mods=mods.filter(r=>r.id!==cs.id).concat(m);
+    pain=pain.filter(r=>r.id!==cs.id).concat(p); mods=mods.filter(r=>r.id!==cs.id).concat(m); caps=caps.filter(r=>r.id!==cs.id).concat(k);
   });
   const extra=[...new Set(datos.flatMap(r=>Object.keys(r)))].filter(k=>!order.includes(k));
   const wb=XLSX.utils.book_new();
@@ -1204,6 +1240,8 @@ function mergeWorkbook(existingWB, cases){
   XLSX.utils.book_append_sheet(wb,wsP,'Molestias');
   const wsM=XLSX.utils.json_to_sheet(mods,{header:['id','modificacion','modificacion_nombre','descripcion','deltas']});
   XLSX.utils.book_append_sheet(wb,wsM,'Modificaciones');
+  const wsC=XLSX.utils.json_to_sheet(caps,{header:CAP_HEAD});wsC['!freeze']={xSplit:1,ySplit:1};
+  XLSX.utils.book_append_sheet(wb,wsC,'Capturas');
   const dic=COLS.map(c=>({variable:c.col,descripcion:c.desc,unidad:c.unit,codigos:c.codes,seccion:c.sec}));
   const wsDic=XLSX.utils.json_to_sheet(dic,{header:['variable','descripcion','unidad','codigos','seccion']});
   wsDic['!cols']=[{wch:26},{wch:70},{wch:10},{wch:60},{wch:22}];
@@ -1821,8 +1859,8 @@ function annCount(im){return annShapes(im).length;}
 /* ---------- modelo Bici: medidas ---------- */
 const bikePts=s=>Object.fromEntries(BIKE_PTS.slice(0,s.p.length).map((b,k)=>[b[0],s.p[k]]));
 function bikeFacing(P){if(P.mano&&P.troc)return P.mano[0]>=P.troc[0]?1:-1;if(P.puntera&&P.talon)return P.puntera[0]>=P.talon[0]?1:-1;if(P.hombro&&P.troc)return P.hombro[0]>=P.troc[0]?1:-1;return 1;}
-function bikeMeasures(s){
-  const P=bikePts(s),f=bikeFacing(P),sc=angScale(),out=[];
+function bikeMeasures(s,sc){   // sc = px por cm; si no se pasa, la calibración de la imagen abierta
+  const P=bikePts(s),f=bikeFacing(P),out=[];if(sc===undefined)sc=angScale();
   // Vectores en un sistema "mirando a la derecha y con el eje Y hacia arriba", así los signos no dependen del lado de la foto
   const V=(a,b)=>[f*(b[0]-a[0]),-(b[1]-a[1])],cr=(u,v)=>u[0]*v[1]-u[1]*v[0],dt=(u,v)=>u[0]*v[0]+u[1]*v[1];
   const add=(key,lab,val,signed,x)=>out.push(Object.assign({key,lab,val,signed,col:BIKE_COL[key]},x||{}));
