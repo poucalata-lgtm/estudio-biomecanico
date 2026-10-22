@@ -129,6 +129,7 @@ table.ft tr.off td:not(:first-child) *{pointer-events:none}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .stage video{object-fit:contain}
 .stage canvas.gd{pointer-events:none}
+#cam-live .stage{touch-action:none}
 .note.bad{color:var(--bad)}
 #rev-slider,#fv-slider{width:100%;margin:8px 0 0}
 #rev-slots{justify-content:flex-end}
@@ -329,6 +330,8 @@ body.pdfcap .repwrap{display:block;padding:0}
           <option value="1920x1080@100">1080p · 100 fps</option><option value="1280x720@120">720p · 120 fps</option>
           <option value="1920x1080@60">1080p · 60 fps</option><option value="1920x1080@30">1080p · 30 fps</option></select>
       </div>
+      <div class="mrow"><label title="Zoom digital: solo se graba la zona que ves">Encuadre <input type="range" id="cam-zoom" min="1" max="4" step="0.05" value="1" style="width:160px"></label><b id="cam-zoom-v" style="font-variant-numeric:tabular-nums">1,0×</b>
+        <button class="btn sm" id="cam-crop-reset">Ver imagen completa</button><span class="note" style="margin:0">Haz zoom (barra o rueda del ratón) y arrastra la imagen para dejar al ciclista centrado: solo se graba lo que ves.</span></div>
       <p class="note" id="cam-info"></p>
       <div class="stage"><video id="cam-video" playsinline muted autoplay></video><canvas class="gd"></canvas></div>
       <div class="mrow"><button class="btn pri" id="cam-rec" disabled>● Grabar</button>
@@ -1660,6 +1663,20 @@ function camGuides(){$$('#m-cam canvas.gd').forEach(cv=>{
   cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);
   if($('#cam-guides').checked)drawGrid(c,cv.width,cv.height,Math.max(1,Math.round(d*.8)),true);});}
 
+/* ---------- encuadre antes de grabar: zoom 1×–4× y arrastrar para centrar al ciclista (solo se graba lo que se ve) ---------- */
+CAM.crop={z:1,cx:.5,cy:.5};
+function camCropRect(vw,vh){const c=CAM.crop,z=Math.max(1,Math.min(4,c.z||1)),sw=vw/z,sh=vh/z;
+  return {sx:Math.min(vw-sw,Math.max(0,c.cx*vw-sw/2)),sy:Math.min(vh-sh,Math.max(0,c.cy*vh-sh/2)),sw,sh};}
+function camApplyCrop(){
+  const c=CAM.crop;c.z=Math.max(1,Math.min(4,+c.z||1));const h=.5/c.z;c.cx=Math.min(1-h,Math.max(h,+c.cx||.5));c.cy=Math.min(1-h,Math.max(h,+c.cy||.5));
+  const v=$('#cam-video');v.style.transformOrigin='0 0';v.style.transform=c.z>1.001?`scale(${c.z}) translate(${-(c.cx-h)*100}%,${-(c.cy-h)*100}%)`:'';
+  $('#cam-zoom').value=c.z;const s=CAM.stream&&CAM.stream.getVideoTracks()[0].getSettings();
+  $('#cam-zoom-v').textContent=c.z.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+'×'+(s&&s.width?` · ${Math.round(s.width/c.z)}×${Math.round(s.height/c.z)} px`:'');
+  $('#cam-live .stage').style.cursor=c.z>1.001?'grab':'';
+}
+function camSetZoom(z){CAM.crop.z=z;camApplyCrop();camSaveCrop();}
+function camSaveCrop(){LS.set('cam_crop',JSON.stringify(CAM.crop));}
+
 /* ---------- cámara en directo ---------- */
 // La grabación se reutiliza solo para el mismo estudio y la misma toma (inicial, cada intermedia, final): cada toma necesita su grabación
 function camReusable(i){const im=CUR.imgs[i];return !!(CAM.frames.length&&CAM.caseId===CUR.id&&im&&takeOf(im)===CAM.phase);}
@@ -1697,7 +1714,7 @@ async function camStart(){
   const v=$('#cam-video');v.srcObject=CAM.stream;try{await v.play();}catch(e){}
   LS.set('cam_dev',s.deviceId||'');LS.set('cam_mode',$('#cam-mode').value);
   await camFillDevices();
-  camSetStage($('#cam-live .stage'),s.width||w,s.height||h);
+  camSetStage($('#cam-live .stage'),s.width||w,s.height||h);camApplyCrop();
   const got=Math.round(s.frameRate||0);
   camInfo(`${s.width||'?'}×${s.height||'?'} · ${got||'?'} fps configurados`+(got&&got<fps-1?` — la cámara no da ${fps} fps en este modo`:'')+'. Pon la biela en movimiento y pulsa Grabar.',got&&got<fps-1);
   $('#cam-rec').disabled=false;camGuides();
@@ -1706,22 +1723,22 @@ async function camRecord(){
   if(!CAM.stream||CAM.busy)return;CAM.busy=true;
   const btn=$('#cam-rec'),dur=+$('#cam-dur').value;LS.set('cam_dur',String(dur));
   camFree();const tr=CAM.stream.getVideoTracks()[0],s=tr.getSettings();
-  const sw=s.width||$('#cam-video').videoWidth,sh=s.height||$('#cam-video').videoHeight;
-  const sc=Math.min(1,CAM_MAXW/Math.max(sw,sh));const W=Math.round(sw*sc),H=Math.round(sh*sc);CAM.W=W;CAM.H=H;
+  const sw=s.width||$('#cam-video').videoWidth,sh=s.height||$('#cam-video').videoHeight,R0=camCropRect(sw,sh);   // solo la zona encuadrada
+  const sc=Math.min(1,CAM_MAXW/Math.max(R0.sw,R0.sh));const W=Math.round(R0.sw*sc),H=Math.round(R0.sh*sc);CAM.W=W;CAM.H=H;
   const cv=camCanvas(W,H),frames=[];btn.disabled=true;
   try{
     if(window.MediaStreamTrackProcessor){            // Chrome / Edge: cada fotograma de la cámara con su marca de tiempo
       const t2=tr.clone();const rd=new MediaStreamTrackProcessor({track:t2}).readable.getReader();let t0=null;
       try{for(;;){const {value:fr,done}=await rd.read();if(done)break;
         if(t0===null)t0=fr.timestamp;const t=(fr.timestamp-t0)/1e6;
-        cv.ctx.drawImage(fr,0,0,W,H);fr.close();frames.push({ts:t,p:cv.blob()});
+        const R=camCropRect(fr.displayWidth||sw,fr.displayHeight||sh);cv.ctx.drawImage(fr,R.sx,R.sy,R.sw,R.sh,0,0,W,H);fr.close();frames.push({ts:t,p:cv.blob()});
         btn.textContent=`Grabando… ${t.toFixed(1)} s`;if(t>=dur||!camOpenNow())break;}}
       finally{rd.cancel().catch(()=>{});t2.stop();}
     }else{                                           // otros navegadores: fotogramas tal y como se muestran
       const v=$('#cam-video');
       if(!v.requestVideoFrameCallback)throw new Error('este navegador no permite capturar fotogramas; usa Chrome o Edge');
       await new Promise(res=>{let t0=null;const step=(now,md)=>{const ts=md&&md.mediaTime!==undefined?md.mediaTime:now/1000;if(t0===null)t0=ts;
-        cv.ctx.drawImage(v,0,0,W,H);frames.push({ts:ts-t0,p:cv.blob()});btn.textContent=`Grabando… ${(ts-t0).toFixed(1)} s`;
+        const R=camCropRect(v.videoWidth||sw,v.videoHeight||sh);cv.ctx.drawImage(v,R.sx,R.sy,R.sw,R.sh,0,0,W,H);frames.push({ts:ts-t0,p:cv.blob()});btn.textContent=`Grabando… ${(ts-t0).toFixed(1)} s`;
         if(ts-t0>=dur||!camOpenNow())res();else v.requestVideoFrameCallback(step);};v.requestVideoFrameCallback(step);});
     }
     if(!camOpenNow())return;
@@ -2132,6 +2149,15 @@ function bindCapture(){
   if(LS.get('cam_grid')==='0')$('#cam-guides').checked=false;
   const d=LS.get('cam_dur');if(d&&[...$('#cam-dur').options].some(o=>o.value===d))$('#cam-dur').value=d;
   $('#cam-close').onclick=camClose;
+  try{const c=JSON.parse(LS.get('cam_crop')||'null');if(c&&c.z)CAM.crop=c;}catch(e){}
+  $('#cam-zoom').oninput=e=>camSetZoom(+e.target.value);
+  $('#cam-crop-reset').onclick=()=>{CAM.crop={z:1,cx:.5,cy:.5};camApplyCrop();camSaveCrop();};
+  const lst=$('#cam-live .stage');
+  lst.onpointerdown=e=>{if(CAM.crop.z<=1.001||CAM.busy)return;e.preventDefault();try{lst.setPointerCapture(e.pointerId)}catch(_){}CAM.pan={x:e.clientX,y:e.clientY,cx:CAM.crop.cx,cy:CAM.crop.cy};lst.style.cursor='grabbing';};
+  lst.onpointermove=e=>{const p=CAM.pan;if(!p)return;const r=lst.getBoundingClientRect();
+    CAM.crop.cx=p.cx-(e.clientX-p.x)/r.width/CAM.crop.z;CAM.crop.cy=p.cy-(e.clientY-p.y)/r.height/CAM.crop.z;camApplyCrop();};
+  lst.onpointerup=lst.onpointercancel=()=>{if(CAM.pan){CAM.pan=null;camApplyCrop();camSaveCrop();}};
+  lst.addEventListener('wheel',e=>{if(CAM.busy)return;e.preventDefault();camSetZoom(CAM.crop.z*(e.deltaY<0?1.1:1/1.1));},{passive:false});
   $('#cam-mode').onchange=()=>camStart();$('#cam-dev').onchange=()=>camStart();
   $('#cam-rec').onclick=camRecord;$('#cam-guides').onchange=()=>{LS.set('cam_grid',$('#cam-guides').checked?'1':'0');camGuides();};
   $('#rev-slider').oninput=e=>{CAM.idx=+e.target.value;camDraw();};
