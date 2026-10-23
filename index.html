@@ -1138,8 +1138,8 @@ function buildColumns(){
 const CAP_SEC='Ángulos en capturas (herramienta Bici)';
 const CAP_MEAS=[['tronco','Tronco respecto a la horizontal','°'],['lumbar','Lumbar (0 = trocánter, L5 y hombro alineados; + flexión; − anteversión)','°'],
   ['cuello','Cuello (0 = cabeza alineada con el tronco; + extensión; − flexión)','°'],['hombro','Hombro (ángulo interior trocánter–hombro–codo)','°'],
-  ['codo','Codo (ángulo interior hombro–codo–mano)','°'],['cadera','Cadera (ángulo interior hombro–trocánter–rodilla)','°'],
-  ['rodilla','Rodilla (ángulo interior trocánter–rodilla–tobillo)','°'],['tobillo','Tobillo (ángulo rodilla – maléolo – pie, vértice en el maléolo; más alto = más flexión plantar, más bajo = más flexión dorsal)','°'],
+  ['codo','Codo (flexión hombro–codo–mano: 0 = brazo recto; + flexión; − hiperextensión)','°'],['cadera','Cadera (ángulo interior L5–trocánter–rodilla)','°'],
+  ['rodilla','Rodilla (flexión trocánter–rodilla–tobillo: 0 = pierna recta; + flexión; − hiperextensión)','°'],['tobillo','Tobillo (rodilla – maléolo – pie, vértice en el maléolo: 0 = pierna y pie en línea; + hacia flexión dorsal; − pasado de la línea recta)','°'],
   ['pie','Pie (línea pie–calcáneo vs horizontal; + calcáneo más alto que el pie)','°'],['kops','KOPS (rodilla respecto a la vertical de la puntera; + rodilla por delante, − por detrás; escala con el fémur entre marcadores)','mm']];
 const r1x=x=>x===null||x===undefined||!isFinite(x)?null:Math.round(x*10)/10;
 function capPos(cap){const m=(cap||'').match(/\b(90|180)\b/);if(m)return m[1];
@@ -1889,13 +1889,16 @@ function bikeMeasures(s,sc,fem){   // sc = px por cm de una línea calibrada; fe
     const sg=cr(V(P.troc,P.hombro),V(P.troc,P.l5))>0?1:-1;add('lumbar','Lumbar',sg*(180-angDeg(P.troc,P.l5,P.hombro)),true);}
   if(P.hombro&&P.cabeza&&(P.l5||P.troc)){   // 0 = cabeza alineada con el tronco; + extensión; − flexión
     const u=V(P.l5||P.troc,P.hombro),h=V(P.hombro,P.cabeza);add('cuello','Cuello',Math.atan2(cr(u,h),dt(u,h))*R2D,true);}
+  // Flexión con signo: 0 = segmentos en línea recta; + = flexión; − = pasado de la línea recta (hiperextensión).
+  // dir = sentido de giro de la flexión en este sistema: +1 antihorario (codo, tobillo), −1 horario (rodilla).
+  const flex=(A,B,C,dir)=>{const v=180-angDeg(A,B,C);return cr(V(A,B),V(B,C))*dir<0?-v:v;};
   if(P.troc&&P.hombro&&P.codo)add('hombro','Hombro',angDeg(P.troc,P.hombro,P.codo));
-  if(P.hombro&&P.codo&&P.mano)add('codo','Codo',angDeg(P.hombro,P.codo,P.mano));
-  if(P.hombro&&P.troc&&P.rodilla)add('cadera','Cadera',angDeg(P.hombro,P.troc,P.rodilla));
-  if(P.troc&&P.rodilla&&P.tobillo)add('rodilla','Rodilla',angDeg(P.troc,P.rodilla,P.tobillo));
-  // Tobillo: definición estándar en cinemática 2D sagital (epicóndilo femoral lateral – maléolo lateral – 5.º metatarsiano), vértice en el maléolo.
-  // Más alto = más flexión plantar; más bajo = más flexión dorsal.
-  if(P.rodilla&&P.tobillo&&P.puntera)add('tobillo','Tobillo',angDeg(P.rodilla,P.tobillo,P.puntera));
+  if(P.hombro&&P.codo&&P.mano)add('codo','Codo',flex(P.hombro,P.codo,P.mano,1));
+  if(P.l5&&P.troc&&P.rodilla)add('cadera','Cadera',angDeg(P.l5,P.troc,P.rodilla));   // ángulo interior L5–trocánter–rodilla
+  if(P.troc&&P.rodilla&&P.tobillo)add('rodilla','Rodilla',flex(P.troc,P.rodilla,P.tobillo,-1));
+  // Tobillo: marcadores estándar 2D sagital (epicóndilo femoral – maléolo lateral – 5.º metatarsiano), vértice en el maléolo.
+  // 0 = pierna y pie en línea recta; + cuanto más se cierra (hacia flexión dorsal); − si el pie pasa de la línea recta.
+  if(P.rodilla&&P.tobillo&&P.puntera)add('tobillo','Tobillo',flex(P.rodilla,P.tobillo,P.puntera,1));
   if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // desde la puntera respecto a la horizontal; + = talón más alto que la puntera
   if(P.rodilla&&P.puntera){   // en mm; + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla
     const ks=fem>0&&P.troc?dist(P.troc,P.rodilla)/fem:sc;   // px por cm: con el fémur entre marcadores (preferente) o con una línea calibrada
@@ -1922,6 +1925,9 @@ const sweep=(a1,a2)=>{let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)
 const ang2=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0]);
 function interior(c,B,A,C,r,col,u){const a1=ang2(B,A);return wedge(c,B,a1,sweep(a1,ang2(B,C)),r,col,u);}
 const arcR=(B,A,C,u,k)=>Math.max(u*4,Math.min(u*k,dist(B,A)*.42,dist(B,C)*.42));
+function flexArc(c,A,B,C,col,u,k){   // ángulo de flexión en B: desde la prolongación de A→B hasta B→C
+  const a1=ang2(A,B),len=Math.max(u*12,Math.min(u*k*1.8,dist(A,B)*.6)),ext=[B[0]+Math.cos(a1)*len,B[1]+Math.sin(a1)*len];
+  seg(c,B,ext,col,u,true);return wedge(c,B,a1,sweep(a1,ang2(B,C)),Math.max(u*5,Math.min(u*k,dist(B,C)*.42,len*.8)),col,u);}
 function label(c,txt,pos,col,u,rec){
   c.font=`700 ${u*7.2}px Roboto, Arial, sans-serif`;c.textAlign='center';c.textBaseline='middle';
   const w=c.measureText(txt).width+u*5,h=u*10;let [x,y]=pos;x=Math.min(ANG.W-w/2,Math.max(w/2,x));y=Math.min(ANG.H-h/2,Math.max(h/2,y));
@@ -1953,7 +1959,7 @@ function drawShape(c,s,u,o){
     if(M.tronco){const len=Math.max(u*30,dist(P.troc,P.hombro)*.75);seg(c,P.troc,[P.troc[0]+f*len,P.troc[1]],BIKE_COL.tronco,u,true);
       wedge(c,P.troc,fwd,sweep(fwd,ang2(P.troc,P.hombro)),Math.min(u*24,len*.6),BIKE_COL.tronco,u);
       L(measShort(M.tronco),'tronco',[P.troc[0]+f*(len+u*16),P.troc[1]],BIKE_COL.tronco);}   // etiqueta al final de la horizontal, sin pisar la de cadera
-    if(M.cadera)L(measShort(M.cadera),'cadera',interior(c,P.troc,P.hombro,P.rodilla,arcR(P.troc,P.hombro,P.rodilla,u,12),BIKE_COL.cadera,u),BIKE_COL.cadera);
+    if(M.cadera)L(measShort(M.cadera),'cadera',interior(c,P.troc,P.l5,P.rodilla,arcR(P.troc,P.l5,P.rodilla,u,12),BIKE_COL.cadera,u),BIKE_COL.cadera);
     if(M.lumbar){const a1=ang2(P.troc,P.l5),ext=[P.l5[0]+Math.cos(a1)*u*22,P.l5[1]+Math.sin(a1)*u*22];seg(c,P.l5,ext,BIKE_COL.lumbar,u,true);
       wedge(c,P.l5,a1,sweep(a1,ang2(P.l5,P.hombro)),u*12,BIKE_COL.lumbar,u);
       const T=[f*(P.hombro[0]-P.troc[0]),-(P.hombro[1]-P.troc[1])],n=Math.hypot(...T)||1,back=[f*(-T[1])/n,-(T[0])/n];
@@ -1962,9 +1968,10 @@ function drawShape(c,s,u,o){
       seg(c,P.hombro,ext,BIKE_COL.cuello,u,true);
       L(measShort(M.cuello),'cuello',wedge(c,P.hombro,a1,sweep(a1,ang2(P.hombro,P.cabeza)),Math.min(u*18,len*.7),BIKE_COL.cuello,u),BIKE_COL.cuello);}
     if(M.hombro)L(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
-    if(M.codo)L(measShort(M.codo),'codo',interior(c,P.codo,P.hombro,P.mano,arcR(P.codo,P.hombro,P.mano,u,10),BIKE_COL.codo,u),BIKE_COL.codo);
-    if(M.rodilla)L(measShort(M.rodilla),'rodilla',interior(c,P.rodilla,P.troc,P.tobillo,arcR(P.rodilla,P.troc,P.tobillo,u,12),BIKE_COL.rodilla,u),BIKE_COL.rodilla);
-    if(M.tobillo)L(measShort(M.tobillo),'tobillo',interior(c,P.tobillo,P.rodilla,P.puntera,arcR(P.tobillo,P.rodilla,P.puntera,u,10),BIKE_COL.tobillo,u),BIKE_COL.tobillo);   // vértice en el maléolo
+    // Flexión: prolongación discontinua del segmento proximal y sector hasta el segmento distal
+    if(M.codo)L(measShort(M.codo),'codo',flexArc(c,P.hombro,P.codo,P.mano,BIKE_COL.codo,u,10),BIKE_COL.codo);
+    if(M.rodilla)L(measShort(M.rodilla),'rodilla',flexArc(c,P.troc,P.rodilla,P.tobillo,BIKE_COL.rodilla,u,12),BIKE_COL.rodilla);
+    if(M.tobillo)L(measShort(M.tobillo),'tobillo',flexArc(c,P.rodilla,P.tobillo,P.puntera,BIKE_COL.tobillo,u,10),BIKE_COL.tobillo);   // vértice en el maléolo
     if(M.pie){   // horizontal discontinua desde la puntera hacia atrás y ángulo con la línea puntera–talón
       const col=BIKE_COL.pie,fl=dist(P.talon,P.puntera),len=Math.max(u*16,fl*1.15),bwd=f>0?Math.PI:0;
       seg(c,P.puntera,[P.puntera[0]-f*len,P.puntera[1]],col,u,true);
@@ -2023,7 +2030,7 @@ function angList(){
     if(s.t==='line')return it(s.c||LINE_COL,`${k+1}. Línea: <b>${esc(lineText(s,sc,true))}</b>`,k);
     return `<span class="it bike"><b>${k+1}. Bici</b><button class="btn sm" data-femur="1" title="Longitud del fémur entre marcadores (trocánter – rodilla); da la escala del KOPS">Fémur: ${caseFemur()?fmtCm(caseFemur()):'—'} ✎</button>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
   });
-  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo rodilla – maléolo – pie con vértice en el maléolo (definición estándar 2D sagital); más alto = más flexión plantar, más bajo = más flexión dorsal. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS en mm: + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla (escala con el fémur entre marcadores). El resto, ángulo interior entre segmentos.</p>':'';
+  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Codo, rodilla y tobillo en flexión: 0 = segmentos en línea recta; + = flexión; − = hiperextensión (pasado de la línea recta). Tobillo = rodilla – maléolo – pie con vértice en el maléolo; más alto = más flexión dorsal. Cadera = ángulo interior L5 – trocánter – rodilla. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS en mm: + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla (escala con el fémur entre marcadores). Tronco respecto a la horizontal; hombro, ángulo interior entre segmentos.</p>':'';
   $('#ang-list').innerHTML=(L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>')+bikeNote;
   $$('[data-angdel]').forEach(b=>b.onclick=()=>{angPush();ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
   $$('[data-femur]').forEach(b=>b.onclick=angAskFemur);
