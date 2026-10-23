@@ -1139,7 +1139,7 @@ const CAP_SEC='Ángulos en capturas (herramienta Bici)';
 const CAP_MEAS=[['tronco','Tronco respecto a la horizontal','°'],['lumbar','Lumbar (0 = trocánter, L5 y hombro alineados; + flexión; − anteversión)','°'],
   ['cuello','Cuello (0 = cabeza alineada con el tronco; + extensión; − flexión)','°'],['hombro','Hombro (ángulo interior trocánter–hombro–codo)','°'],
   ['codo','Codo (ángulo interior hombro–codo–mano)','°'],['cadera','Cadera (ángulo interior hombro–trocánter–rodilla)','°'],
-  ['rodilla','Rodilla (ángulo interior trocánter–rodilla–tobillo)','°'],['tobillo','Tobillo (línea tobillo–rodilla vs línea calcáneo–pie, vértice en el calcáneo)','°'],
+  ['rodilla','Rodilla (ángulo interior trocánter–rodilla–tobillo)','°'],['tobillo','Tobillo (ángulo rodilla – maléolo – pie, vértice en el maléolo; más alto = más flexión plantar, más bajo = más flexión dorsal)','°'],
   ['pie','Pie (línea pie–calcáneo vs horizontal; + calcáneo más alto que el pie)','°'],['kops','KOPS (rodilla respecto a la vertical de la puntera; + rodilla por delante, − por detrás; escala con el fémur entre marcadores)','mm']];
 const r1x=x=>x===null||x===undefined||!isFinite(x)?null:Math.round(x*10)/10;
 function capPos(cap){const m=(cap||'').match(/\b(90|180)\b/);if(m)return m[1];
@@ -1859,7 +1859,7 @@ const ANG_N={angle:3,line:2,bike:10};
 const BIKE_PTS=[['troc','Trocánter'],['l5','L5'],['hombro','Hombro'],['cabeza','Cabeza'],['codo','Codo'],['mano','Mano'],['rodilla','Rodilla'],['tobillo','Tobillo'],['talon','Talón'],['puntera','Puntera']];
 const BIKE_COL={tronco:'#22c55e',lumbar:'#f97316',cuello:'#ef4444',hombro:'#eab308',codo:'#a855f7',cadera:'#3b82f6',rodilla:'#ec4899',tobillo:'#facc15',pie:'#d946ef',kops:'#dc2626'};
 const BIKE_SEG=[['mano','codo','#a855f7'],['codo','hombro','#a855f7'],['hombro','cabeza','#ef4444'],['hombro','l5','#f97316'],['l5','troc','#f97316'],
-  ['troc','rodilla','#ec4899'],['rodilla','tobillo','#facc15'],['talon','puntera','#d946ef']];
+  ['troc','rodilla','#ec4899'],['rodilla','tobillo','#facc15'],['tobillo','puntera','#facc15'],['talon','puntera','#d946ef']];
 const R2D=180/Math.PI;
 const fmtDeg=(x,sign)=>{if(Math.abs(x)<0.05)x=0;return (sign&&x>0?'+':'')+x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1}).replace('-','−')+'°';};
 const fmtCm=x=>x.toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' cm';
@@ -1893,8 +1893,9 @@ function bikeMeasures(s,sc,fem){   // sc = px por cm de una línea calibrada; fe
   if(P.hombro&&P.codo&&P.mano)add('codo','Codo',angDeg(P.hombro,P.codo,P.mano));
   if(P.hombro&&P.troc&&P.rodilla)add('cadera','Cadera',angDeg(P.hombro,P.troc,P.rodilla));
   if(P.troc&&P.rodilla&&P.tobillo)add('rodilla','Rodilla',angDeg(P.troc,P.rodilla,P.tobillo));
-  if(P.rodilla&&P.tobillo&&P.talon&&P.puntera){   // línea rodilla–tobillo frente a línea talón–puntera, con vértice en el calcáneo
-    const sh=[P.talon[0]+P.rodilla[0]-P.tobillo[0],P.talon[1]+P.rodilla[1]-P.tobillo[1]];add('tobillo','Tobillo',angDeg(sh,P.talon,P.puntera));}
+  // Tobillo: definición estándar en cinemática 2D sagital (epicóndilo femoral lateral – maléolo lateral – 5.º metatarsiano), vértice en el maléolo.
+  // Más alto = más flexión plantar; más bajo = más flexión dorsal.
+  if(P.rodilla&&P.tobillo&&P.puntera)add('tobillo','Tobillo',angDeg(P.rodilla,P.tobillo,P.puntera));
   if(P.talon&&P.puntera){const F=V(P.talon,P.puntera);add('pie','Pie',Math.atan2(-F[1],F[0])*R2D,true);}   // desde la puntera respecto a la horizontal; + = talón más alto que la puntera
   if(P.rodilla&&P.puntera){   // en mm; + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla
     const ks=fem>0&&P.troc?dist(P.troc,P.rodilla)/fem:sc;   // px por cm: con el fémur entre marcadores (preferente) o con una línea calibrada
@@ -1963,11 +1964,7 @@ function drawShape(c,s,u,o){
     if(M.hombro)L(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
     if(M.codo)L(measShort(M.codo),'codo',interior(c,P.codo,P.hombro,P.mano,arcR(P.codo,P.hombro,P.mano,u,10),BIKE_COL.codo,u),BIKE_COL.codo);
     if(M.rodilla)L(measShort(M.rodilla),'rodilla',interior(c,P.rodilla,P.troc,P.tobillo,arcR(P.rodilla,P.troc,P.tobillo,u,12),BIKE_COL.rodilla,u),BIKE_COL.rodilla);
-    if(M.tobillo){   // vértice en el calcáneo: paralela discontinua a tobillo→rodilla desde el talón y arco hasta la línea talón–puntera
-      const col=BIKE_COL.tobillo,fl=dist(P.talon,P.puntera),b=ang2(P.tobillo,P.rodilla),len=Math.max(u*22,dist(P.tobillo,P.rodilla)*.45);
-      seg(c,P.talon,[P.talon[0]+Math.cos(b)*len,P.talon[1]+Math.sin(b)*len],col,u,true);
-      const a1=ang2(P.talon,P.puntera);
-      L(measShort(M.tobillo),'tobillo',wedge(c,P.talon,a1,sweep(a1,b),Math.max(u*5,Math.min(u*13,fl*.45)),col,u),col);}
+    if(M.tobillo)L(measShort(M.tobillo),'tobillo',interior(c,P.tobillo,P.rodilla,P.puntera,arcR(P.tobillo,P.rodilla,P.puntera,u,10),BIKE_COL.tobillo,u),BIKE_COL.tobillo);   // vértice en el maléolo
     if(M.pie){   // horizontal discontinua desde la puntera hacia atrás y ángulo con la línea puntera–talón
       const col=BIKE_COL.pie,fl=dist(P.talon,P.puntera),len=Math.max(u*16,fl*1.15),bwd=f>0?Math.PI:0;
       seg(c,P.puntera,[P.puntera[0]-f*len,P.puntera[1]],col,u,true);
@@ -2026,7 +2023,7 @@ function angList(){
     if(s.t==='line')return it(s.c||LINE_COL,`${k+1}. Línea: <b>${esc(lineText(s,sc,true))}</b>`,k);
     return `<span class="it bike"><b>${k+1}. Bici</b><button class="btn sm" data-femur="1" title="Longitud del fémur entre marcadores (trocánter – rodilla); da la escala del KOPS">Fémur: ${caseFemur()?fmtCm(caseFemur()):'—'} ✎</button>${bikeMeasures(s).map(m=>`<span class="m"><i style="background:${m.col}"></i>${esc(measLong(m))}</span>`).join('')}<button class="btn sm" data-angdel="${k}" title="Quitar">✕</button></span>`;
   });
-  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo entre la línea tobillo–rodilla y la línea calcáneo (talón)–pie (puntera), con vértice en el calcáneo. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS en mm: + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla (escala con el fémur entre marcadores). El resto, ángulo interior entre segmentos.</p>':'';
+  const bikeNote=ANG.shapes.some(s=>s.t==='bike')?'<p class="note" style="margin:6px 0 0;width:100%">Criterios: Lumbar 0 = trocánter, L5 y hombro alineados; + espalda hacia atrás (flexión), − anteversión. Cuello 0 = cabeza alineada con el tronco; + extensión, − flexión. Tobillo = ángulo rodilla – maléolo – pie con vértice en el maléolo (definición estándar 2D sagital); más alto = más flexión plantar, más bajo = más flexión dorsal. Pie = inclinación talón–puntera respecto a la horizontal desde la puntera; + = talón más alto que la puntera. KOPS en mm: + = rodilla por delante de la vertical de la puntera, − = la vertical pasa por delante de la rodilla (escala con el fémur entre marcadores). El resto, ángulo interior entre segmentos.</p>':'';
   $('#ang-list').innerHTML=(L.length?L.join(''):'<span class="note" style="margin:0">Sin medidas todavía.</span>')+bikeNote;
   $$('[data-angdel]').forEach(b=>b.onclick=()=>{angPush();ANG.shapes.splice(+b.dataset.angdel,1);angList();angDraw();});
   $$('[data-femur]').forEach(b=>b.onclick=angAskFemur);
