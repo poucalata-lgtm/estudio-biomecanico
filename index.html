@@ -468,13 +468,10 @@ const SECTIONS=[
   {k:'fecha_nac',l:'Fecha de nacimiento',t:'date',x:0},
   {k:'edad',l:'Edad (calculada)',t:'calc',u:'años',x:1,h:'A fecha del estudio'},
   {k:'sexo',l:'Sexo',t:'select',o:SEX,x:1},
+  {k:'altura',l:'Estatura',t:'num',u:'cm',x:1,h:'Descalzo'},
+  {k:'peso',l:'Peso',t:'num',u:'kg',x:1},
   {k:'tecnico',l:'Técnico que realiza el estudio',t:'text',list:'dl-tec',x:1},
   {k:'nivel',l:'Nivel competitivo actual',t:'select',x:1,w:2,o:[['1','Amateur — no compito'],['2','Local / autonómico — carreras locales y campeonatos regionales'],['3','Nacional — compito fuera de mi comunidad, incluidos campeonatos nacionales'],['4','Internacional / profesional — pruebas internacionales y/o cobro por ello']]},
-  {k:'potenciometro',l:'¿Tiene datos de potencia (vatios)?',t:'yn',dd:1,x:1},
-  {k:'w_20min',dep:['potenciometro','1'],l:'Potencia máxima 20 min (último año)',t:'num',u:'W',x:1},
-  {k:'wkg_20min',dep:['potenciometro','1'],l:'Potencia 20 min relativa (calculada)',t:'calc',u:'W/kg',x:1,w:2,h:'Usa el peso de Antropometría'},
-  {k:'w_rodaje',dep:['potenciometro','1'],l:'Potencia media en rodajes habituales',t:'num',u:'W',x:1,h:'Las salidas donde mete más volumen'},
-  {k:'wkg_rodaje',dep:['potenciometro','1'],l:'Potencia rodaje relativa (calculada)',t:'calc',u:'W/kg',x:1,w:2,h:'Usa el peso de Antropometría'},
  ]},
  {id:'bici',title:'Bicicleta',fields:[
   {k:'bici_tipo',l:'Tipo',t:'select',x:1,o:[['CAR','Carretera'],['GRA','Gravel'],['MTB','MTB'],['TRI','Triatlón / CRI'],['URB','Urbana / e-bike'],['OTR','Otra']]},
@@ -510,6 +507,13 @@ const SECTIONS=[
   {k:'trabajo_fis',l:'¿Trabajo físico o movimientos repetitivos?',t:'yn',x:1},
   {k:'estudio_prev',l:'¿Estudio biomecánico previo?',t:'yn',x:1},
   {k:'otros_dep',l:'Otros deportes',t:'text',x:1,w:2},
+  {k:'potenciometro',l:'¿Entrenas con potenciómetro?',t:'yn',dd:1,x:1},
+  {k:'pot_ubic',dep:['potenciometro','1'],l:'¿Dónde está tu potenciómetro?',t:'select',x:1,o:[['PED','Pedal'],['BIE','Biela'],['ARA','Araña'],['EJE','Eje de pedalier'],['RUE','Rueda trasera'],['OTR','Otra']]},
+  {k:'pot_marca',dep:['potenciometro','1'],l:'Marca y modelo del potenciómetro',t:'text',x:1},
+  {k:'w_20min',dep:['potenciometro','1'],l:'Mejores vatios en 20 min (último año)',t:'num',u:'W',x:1},
+  {k:'wkg_20min',dep:['potenciometro','1'],l:'Potencia 20 min relativa (calculada)',t:'calc',u:'W/kg',x:1,w:2,h:'Usa el peso del apartado Ciclista'},
+  {k:'w_rodaje',dep:['potenciometro','1'],l:'Potencia media en rodajes habituales',t:'num',u:'W',x:1,h:'Las salidas donde mete más volumen'},
+  {k:'wkg_rodaje',dep:['potenciometro','1'],l:'Potencia rodaje relativa (calculada)',t:'calc',u:'W/kg',x:1,w:2,h:'Usa el peso del apartado Ciclista'},
  ]},
  {id:'hc',title:'Historia clínica',fields:[
   {k:'sistemicas',l:'Sistémicas / metabólicas / crónicas',t:'yn',x:1},
@@ -520,8 +524,6 @@ const SECTIONS=[
  ]},
  {id:'mol',title:'Molestias habituales',custom:'pain'},
  {id:'antro',title:'Antropometría',note:'Los campos en gris se calculan solos. Anota la altura del banco que uses cada día (si es blando, mídela con alguien sentado encima). Altura trocantérea y altura tibial se miden de pie, en vertical desde el suelo, en los mismos puntos que los marcadores de Retül (trocánter y rodilla lateral): fémur = trocantérea − tibial; la altura tibial incluye tibia + tobillo/talón.',fields:[
-  {k:'altura',l:'Altura de pie',t:'num',u:'cm',x:1,h:'Descalzo'},
-  {k:'peso',l:'Peso',t:'num',u:'kg',x:1},
   {k:'imc',l:'IMC (calculado)',t:'calc',u:'kg/m²',x:1,h:'Peso / altura²'},
   {k:'pie_talla',l:'Número de calzado',t:'num',u:'EU',x:1},
   {k:'sentado_suelo',l:'Altura sentado (vértex – suelo)',t:'num',u:'cm',x:1,h:'Sentado en el banco, erguido, mirada horizontal'},
@@ -621,10 +623,10 @@ const CALCS={
 const FIELDS={};
 const MODE=()=>(CUR&&CUR.v&&CUR.v.modo)||'full';
 const SIMPLE_SECTIONS=[
- {id:'cli',title:'Ciclista',priv:true,note:'Nombre, teléfono, email y fecha de nacimiento aparecen en el informe pero NUNCA se exportan al Excel.',fields:['nombre','fecha','telefono','email','fecha_nac','edad','sexo','tecnico']},
+ {id:'cli',title:'Ciclista',priv:true,note:'Nombre, teléfono, email y fecha de nacimiento aparecen en el informe pero NUNCA se exportan al Excel.',fields:['nombre','fecha','telefono','email','fecha_nac','edad','sexo','altura','peso','tecnico']},
  {id:'bici',title:'Bicicleta',fields:['bici_tipo','bici_num','cod_inf','bici_marca','bici_modelo','bici_talla','bici_anio']},
  {id:'mot',title:'Motivo principal de visita',fields:[{k:'motivo_txt',l:'Motivo principal',t:'textarea',w:3}]},
- {id:'hab',title:'Hábitos y práctica del ciclismo',fields:['horas_sem','fuerza','movilidad','trabajo_fis']},
+ {id:'hab',title:'Hábitos y práctica del ciclismo',fields:['horas_sem','fuerza','movilidad','trabajo_fis','potenciometro','pot_ubic','pot_marca','w_20min','wkg_20min']},
  {id:'hc',title:'Historia clínica',fields:['sistemicas','sistemicas_txt',{k:'me_txt',l:'Trastornos músculo-esqueléticos',t:'textarea',w:3},'hc_otras']},
  {id:'mol',title:'Molestias habituales',fields:[{k:'mol_bici_txt',l:'Sobre la bicicleta',t:'textarea',w:3},{k:'mol_dia_txt',l:'En tu vida diaria',t:'textarea',w:3}]},
  {id:'vf',title:'Valoración funcional',fields:[{k:'dfx_txt',l:'Movilidad de tobillos',t:'text',w:3},{k:'sup_txt',l:'Sentadilla unipodal',t:'text',w:3},{k:'sp_txt',l:'Sentadilla profunda',t:'text',w:3},{k:'hombro_txt',l:'Movilidad de hombro',t:'text',w:3},{k:'isq_txt',l:'Flexibilidad isquiosural',t:'text',w:3},{k:'thomas_txt',l:'Test de Thomas',t:'text',w:3}]},
