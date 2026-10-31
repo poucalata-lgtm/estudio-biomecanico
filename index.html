@@ -170,6 +170,7 @@ table.list tr:hover td{background:#fafcff}
 /* =================== INFORME =================== */
 .repwrap{padding:24px 0 80px;display:flex;flex-direction:column;align-items:center;gap:10px}
 .more>summary{cursor:pointer;color:var(--accent,#1d4ed8);font-weight:600;padding:4px 0}
+.f.red textarea{color:#dc2626;font-weight:600}
 .f.red>label,.f.red>label:first-child{color:#dc2626!important;font-weight:700}
 .r-prest{color:#dc2626;margin-top:2mm}
 .cons-info{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45}.cons-info summary{cursor:pointer;color:var(--accent,#1d4ed8);font-size:12.5px}
@@ -887,10 +888,13 @@ document.addEventListener('change',e=>{const t=e.target;
   else if(t.dataset&&t.dataset.k==='consent')consSync();
   else if(t.dataset&&t.dataset.k==='prestado'&&t.checked)prestFill();});
 // Al marcar «Material prestado» se rellenan el aviso y un ejemplo como texto editable (solo si están vacíos)
-function prestFill(){[['prest_msg',PREST_MSG],['prest_txt',PREST_EJ],['prest_estado','PEND']].forEach(([k,d])=>{if(CUR&&(CUR.v[k]||'').trim())return;
-  document.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{el.value=d;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});});}
+function prestFill(){if(!CUR||!CUR.v.prestado)return;const v=CUR.v,set=(k,d)=>{v[k]=d;document.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{el.value=d;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});};
+  const old=(v.prest_msg||'').trim();
+  if(!old||(old.length<40&&!/prestad/i.test(old))){if(old&&(!(v.prest_txt||'').trim()||v.prest_txt===PREST_EJ))set('prest_txt',old);else if(!(v.prest_txt||'').trim())set('prest_txt',PREST_EJ);set('prest_msg',PREST_MSG);}
+  else if(!(v.prest_txt||'').trim())set('prest_txt',PREST_EJ);
+  if(!v.prest_estado)set('prest_estado','PEND');}
 function consSync(){const cb=document.querySelector('input[data-k="consent"]');if(!cb)return;document.querySelectorAll('input[name="cons-r"]').forEach(r=>r.checked=(r.value==='1')===cb.checked&&(cb.checked||cb.dataset.touched==='1'||true));}
-function renderForm(){setTimeout(consSync,0);
+function renderForm(){setTimeout(consSync,0);setTimeout(prestFill,0);
   const toc=[],out=[];
   const simple=MODE()==='simple';
   (simple?SIMPLE_SECTIONS:SECTIONS).forEach(s0=>{
