@@ -325,6 +325,7 @@ body.pdfcap .repwrap{display:block;padding:0}
     <div class="mh"><h3 id="cam-title">Cámara</h3>
       <label>Duración <select id="cam-dur"><option value="1">1 s</option><option value="2">2 s</option><option value="3" selected>3 s</option><option value="5">5 s</option></select></label>
       <label><input type="checkbox" id="cam-guides" checked> Cuadrícula</label>
+      <button class="btn" id="cam-h0" hidden>Ver última grabación</button><button class="btn" id="cam-h1" hidden>Ver penúltima grabación</button>
       <button class="btn" id="cam-close">Cerrar</button></div>
     <div id="cam-live">
       <div class="mrow">
@@ -1663,7 +1664,15 @@ function camCanvas(W,H){
 }
 // blobToDataURL: definido en el módulo de Drive
 const camOpenNow=()=>$('#m-cam').classList.contains('on');
-function camShow(w){['live','file','review'].forEach(k=>$('#cam-'+k).hidden=(k!==w));camGuides();}
+function camShow(w){['live','file','review'].forEach(k=>$('#cam-'+k).hidden=(k!==w));camGuides();camHistBtns();}
+/* ---------- últimas 2 grabaciones guardadas en memoria (se pierden al recargar la página) ---------- */
+CAM.hist=[];
+function camKeep(){CAM.hist=[{frames:CAM.frames,meas:CAM.meas,src:CAM.src,t:new Date()},...CAM.hist.filter(h=>h.frames!==CAM.frames)].slice(0,2);camHistBtns();}
+function camHistBtns(){[0,1].forEach(k=>{const b=$('#cam-h'+k);if(!b)return;const h=CAM.hist[k];b.hidden=!h;
+  if(h)b.textContent=(k?'Ver penúltima grabación':'Ver última grabación')+' ('+h.t.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+')';});}
+function camRescue(k){const h=CAM.hist[k];if(!h)return;camStopStream();camFree();
+  CAM.frames=h.frames;CAM.meas=h.meas;CAM.src=h.src;CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);
+  if(k===1)CAM.hist=[h,CAM.hist[0]];camReview();}
 function camInfo(t,bad){const e=$('#cam-info');e.textContent=t;e.className='note'+(bad?' bad':'');}
 function camSetStage(st,w,h){if(!w||!h)return;st.style.aspectRatio=w+' / '+h;st.style.maxWidth=`calc(64vh * ${(w/h).toFixed(4)})`;}
 function camStopStream(){if(CAM.stream){CAM.stream.getTracks().forEach(t=>t.stop());CAM.stream=null;}const v=$('#cam-video');if(v)v.srcObject=null;}
@@ -1765,7 +1774,7 @@ async function camRecord(){
   }catch(e){toast('Error al grabar: '+e.message,1);return;}
   finally{CAM.busy=false;btn.disabled=false;btn.textContent='● Grabar';}
   if(frames.length<2)return toast('No se capturaron fotogramas. Prueba otra vez.',1);
-  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camReview();
+  camStopStream();CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camKeep();camReview();
 }
 function camMeasure(fr){
   if(fr.length<2)return {fps:0,drop:0};const d=[];for(let k=1;k<fr.length;k++)d.push(fr[k].ts-fr[k-1].ts);
@@ -1805,7 +1814,7 @@ async function vidExtract(){
     btn.textContent='Procesando…';for(const f of frames){f.b=await f.p;delete f.p;}
   }finally{v.pause();v.playbackRate=1;CAM.busy=false;btn.disabled=false;btn.textContent='Extraer fotogramas';}
   if(frames.length<2)return toast('No se pudieron extraer fotogramas de ese tramo.',1);
-  CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camReview();
+  CAM.frames=frames;CAM.meas=camMeasure(frames);CAM.used={};CAM.caseId=CUR.id;CAM.phase=takeOf(CUR.imgs[CAM.target]);camKeep();camReview();
 }
 
 /* ---------- visor fotograma a fotograma ---------- */
@@ -2198,6 +2207,7 @@ function bindCapture(){
   if(LS.get('cam_grid')==='0')$('#cam-guides').checked=false;
   const d=LS.get('cam_dur');if(d&&[...$('#cam-dur').options].some(o=>o.value===d))$('#cam-dur').value=d;
   $('#cam-close').onclick=camClose;
+  $('#cam-h0').onclick=()=>camRescue(0);$('#cam-h1').onclick=()=>camRescue(1);
   try{const c=JSON.parse(LS.get('cam_crop')||'null');if(c&&c.z)CAM.crop=c;}catch(e){}
   $('#cam-zoom').oninput=e=>camSetZoom(+e.target.value);
   $('#cam-crop-reset').onclick=()=>{CAM.crop={z:1,cx:.5,cy:.5};camApplyCrop();camSaveCrop();};
