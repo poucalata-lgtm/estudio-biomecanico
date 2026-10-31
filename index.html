@@ -966,7 +966,7 @@ async function downloadPDF(){
   if(typeof html2pdf==='undefined') return toast('No se pudo cargar el generador de PDF. Usa el botón Imprimir → Guardar como PDF.',1);
   const btn=$('#b-pdf'); btn.disabled=true; const old=btn.textContent; btn.textContent='Generando PDF…';
   try{
-    REP_ANON=true; renderReport(); if(document.fonts&&document.fonts.ready) await document.fonts.ready;
+    renderReport(); if(document.fonts&&document.fonts.ready) await document.fonts.ready;
     const el=$('#report'); el.classList.add('pdfmode'); document.body.classList.add('pdfcap'); const sy=window.scrollY; window.scrollTo(0,0);
     await html2pdf().set({
       margin:[8,0,10,0], filename:pdfName(),
@@ -2250,7 +2250,7 @@ async function init(){
   $('#opt-retul').onchange=renderReport; $('#opt-meas').onchange=renderReport;
   $('#m-settings').onclick=e=>{if(e.target.id==='m-settings')closeModal();};
   window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue='';}});
-  window.addEventListener('beforeprint',()=>{REP_ANON=true;renderReport();document.title=pdfName().replace(/\.pdf$/,'');});
+  window.addEventListener('beforeprint',()=>{document.title=pdfName().replace(/\.pdf$/,'');});
   window.addEventListener('afterprint',()=>{REP_ANON=false;renderReport();document.title='Estudio Biomecánico · Ficha e Informe';});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveCase();}});
 }
