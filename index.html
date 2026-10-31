@@ -255,8 +255,9 @@ body.pdfcap .repwrap{display:block;padding:0}
     <div class="reptools">
       <button class="btn pri" id="b-pdf">⬇ Descargar PDF</button>
       <button class="btn" onclick="window.print()">Imprimir</button>
-      <label class="btn"><input type="checkbox" id="opt-retul" checked> Incluir tabla de ángulos dinámicos</label>
-      <label class="btn"><input type="checkbox" id="opt-meas" checked> Incluir tabla de medidas</label>
+      <label class="btn"><input type="checkbox" id="opt-retul"> Incluir tabla de ángulos dinámicos</label>
+      <label class="btn"><input type="checkbox" id="opt-meas"> Incluir tabla de medidas</label>
+      <label class="btn"><input type="checkbox" id="opt-ann"> Mostrar ángulos y líneas en las imágenes</label>
     </div>
     <div id="report"></div>
   </div>
@@ -891,6 +892,7 @@ function modDone(c){const t=modText(c);return !!t&&!NOCHANGE.test(t);}
 /* ---------- imágenes ---------- */
 let imgTarget=null;
 // Parejas para el informe: [inicial, final] con el mismo pie sin "inicial/final" (90 con 90, 180 con 180). Primero 90, luego 180, luego el resto.
+const repImg=i=>$('#opt-ann').checked||!i.base?i.src:i.base;   // sin trazos: imagen original
 function imgPairs(){
   const key=c=>(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|antes|despues)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
   const rows=[];const get=k=>{let r=rows.find(r=>r.k===k);if(!r){r={k,ini:[],fin:[]};rows.push(r);}return r;};
@@ -1064,7 +1066,7 @@ function renderReport(){
     ${block('Resumen de modificaciones realizadas',mods)}
     ${block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:''])}
     `}
-    ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(pr=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}</div><img src="${i.src}"></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
+    ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(pr=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}</div><img src="${repImg(i)}"${!$('#opt-ann').checked&&i.base&&i.ann&&i.ann.flip?' style="transform:scaleX(-1)"':''}></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
     <div class="r-foot">${esc(S.footer)}</div>
     <div class="r-ref">Ref. ${esc(CUR.id)}</div>
   </div>`;
@@ -2247,7 +2249,7 @@ async function init(){
   if(GD.available&&new URLSearchParams(location.search).get('carpeta')) showView('cases');
   $('#b-pdf').onclick=downloadPDF;
   bindCapture();
-  $('#opt-retul').onchange=renderReport; $('#opt-meas').onchange=renderReport;
+  $('#opt-retul').onchange=renderReport; $('#opt-meas').onchange=renderReport; $('#opt-ann').onchange=renderReport;
   $('#m-settings').onclick=e=>{if(e.target.id==='m-settings')closeModal();};
   window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue='';}});
   window.addEventListener('beforeprint',()=>{document.title=pdfName().replace(/\.pdf$/,'');});
