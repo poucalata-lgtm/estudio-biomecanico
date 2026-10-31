@@ -169,6 +169,8 @@ table.list tr:hover td{background:#fafcff}
 
 /* =================== INFORME =================== */
 .repwrap{padding:24px 0 80px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.cons-info{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45}.cons-info summary{cursor:pointer;color:var(--accent,#1d4ed8);font-size:12.5px}
+.cons-info h4{font-size:12.5px;margin:10px 0 3px;color:var(--ink)}.cons-info p,.cons-info ul{margin:0 0 6px}.cons-opt{display:flex;gap:8px;align-items:flex-start;margin:6px 0;color:var(--ink)}
 .reptools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
 #report{background:#fff;width:210mm;max-width:100%;box-shadow:0 2px 14px rgba(0,0,0,.12);font-family:Roboto,Arial,sans-serif;color:#222;font-size:9.6pt;line-height:1.38}
 .rp{padding:9mm 15mm 12mm}
@@ -571,7 +573,7 @@ const SECTIONS=[
   {k:'vf_txt',l:'Otras observaciones funcionales',t:'textarea',x:1,w:3},
  ]},
  {id:'cons',title:'Consentimiento',fields:[
-  {k:'consent',l:'El/la ciclista consiente el uso de sus datos, de forma anonimizada, con fines de investigación',t:'check',x:0,w:3},
+  {k:'consent',l:'El/la ciclista consiente el uso de sus datos, de forma anonimizada, con fines de investigación',t:'check',x:0,w:3,info:1},
  ]},
  {id:'capini',title:'Capturas iniciales',custom:'capini'},
  {id:'capmid',title:'Tomas intermedias',custom:'imgs_mid'},
@@ -728,11 +730,34 @@ function inputHTML(f){
     case 'check': return `<label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;color:var(--ink)"><input type="checkbox" data-k="${k}" style="margin-top:3px">${esc(f.l)}</label>`;
   }
 }
+const CONS_INFO=`<h4>Información básica sobre protección de datos</h4>
+<p>De acuerdo con el Reglamento (UE) 2016/679 (RGPD) y la Ley Orgánica 3/2018, de 5 de diciembre, de Protección de Datos Personales y garantía de los derechos digitales, los datos personales que se le solicitan (por ejemplo: edad, sexo, medidas antropométricas, datos de salud y de práctica deportiva, e imágenes de su posición sobre la bicicleta) son los necesarios para realizar su estudio biomecánico y, si lo autoriza, para los objetivos de investigación descritos. En ninguno de los informes, análisis o publicaciones de investigación aparecerá su nombre, y su identidad no será revelada a persona alguna salvo requerimiento legal. La información personal identificable se conservará y procesará en condiciones de seguridad y se mantendrá de forma que permita su identificación durante no más tiempo del necesario. Los resultados podrán comunicarse a la comunidad científica en congresos y/o publicaciones, eliminando siempre toda la información que permita identificarle.</p>
+<h4>¿Quién es el responsable del tratamiento de sus datos?</h4>
+<p>Aero Cycling Project (AECY), Zaragoza (España). Técnicos responsables: Pablo Díez Martínez y Javier Fontán Puig. Contacto: aecy.project@gmail.com.</p>
+<h4>¿Con qué finalidad se tratan sus datos?</h4>
+<p>1) Realizar su estudio biomecánico y elaborar su informe. 2) Solo si marca su consentimiento: incorporar sus datos, de forma pseudonimizada (con un código y sin nombre, teléfono, email ni imágenes), a una base de datos de investigación sobre biomecánica del ciclismo y ajuste de la bicicleta, para análisis estadísticos y publicaciones científicas. Solo se contactará con usted si hubiera dudas sobre los datos recogidos. Si sus datos se usaran para otros fines científicos, se emplearán únicamente de forma disociada, sin posibilidad de identificarle.</p>
+<h4>¿Dónde se guardan y por cuánto tiempo?</h4>
+<p>Los datos se almacenan en una carpeta de Google Drive de acceso restringido a los técnicos responsables, protegida con verificación en dos pasos. Al tratarse de un proveedor con servidores fuera de la Unión Europea, sus datos podrían transferirse fuera de la UE con las garantías previstas en el RGPD. Los datos identificativos se conservarán el tiempo necesario para la finalidad para la que se recabaron y para atender posibles responsabilidades, además de los plazos que establezca la normativa aplicable.</p>
+<h4>¿Cuál es la legitimación para el tratamiento?</h4>
+<p>Su consentimiento explícito (art. 6.1.a y art. 9.2.a del RGPD, al tratarse de datos relativos a la salud).</p>
+<h4>¿Está obligado a facilitar estos datos?</h4>
+<p>No. La participación en la investigación es totalmente voluntaria. Si no da su consentimiento, su estudio biomecánico se realizará igualmente, pero sus datos no se incluirán en la base de datos de investigación.</p>
+<h4>¿A qué destinatarios se comunicarán sus datos?</h4>
+<p>No se prevé ninguna cesión de sus datos, salvo obligación legal. Los resultados de investigación solo se difundirán de forma agregada y anónima.</p>
+<h4>¿Cuáles son sus derechos?</h4>
+<p>Puede acceder, rectificar, suprimir, oponerse, limitar el tratamiento, solicitar la portabilidad de sus datos y retirar su consentimiento en cualquier momento, escribiendo a aecy.project@gmail.com. Si no obtiene satisfacción en el ejercicio de sus derechos, puede presentar una reclamación ante la Agencia Española de Protección de Datos (www.aepd.es).</p>
+<h4>Condiciones de participación</h4>
+<p>Es libre de dar este consentimiento, sin que su negativa repercuta en su relación actual o futura con el equipo. Puede retirarse en cualquier momento sin dar explicaciones y sin consecuencias. Los riesgos derivados de la cesión de sus datos para investigación son mínimos; si tiene cualquier duda o preocupación puede contactar con los responsables en aecy.project@gmail.com, que le atenderán con confidencialidad y respeto.</p>
+<h4>Consentimiento informado</h4>
+<ul><li>He leído la información anterior.</li><li>He podido hacer preguntas y he recibido suficiente información.</li><li>Comprendo que mi participación es voluntaria y que soy libre de participar o no.</li><li>Se me ha informado de que mis datos serán confidenciales y se tratarán conforme al RGPD (UE) 2016/679 y la Ley Orgánica 3/2018.</li><li>Se me ha informado de que la información obtenida solo se utilizará para los fines específicos descritos.</li><li>Comprendo que puedo retirarme cuando quiera, sin dar explicaciones y sin consecuencias negativas.</li><li>Entiendo que solo pueden participar en la investigación personas mayores de 18 años.</li></ul>
+<p><b>Atendiendo al consentimiento informado descrito:</b></p>
+<label class="cons-opt"><input type="radio" name="cons-r" value="1"> Presto mi consentimiento expreso a participar en el estudio. Soy mayor de edad y acepto libremente participar en la investigación.</label>
+<label class="cons-opt"><input type="radio" name="cons-r" value="0"> No presto mi consentimiento y prefiero no participar en la investigación en este momento.</label>`;
 function fieldHTML(f){
   const w=f.w===3?' w3':f.w===2?' w2':'';
   const dep=f.dep?` data-dep="${f.dep[0]}" data-depv="${f.dep[1]}"`:'';
   if(f.t==='sub') return `<div class="subh" style="grid-column:1/-1;margin:8px 0 0">${esc(f.l)}</div>`;
-  if(f.t==='check') return `<div class="f${w}"${dep}>${inputHTML(f)}</div>`;
+  if(f.t==='check') return `<div class="f${w}"${dep}>${inputHTML(f)}${f.info?`<details class="cons-info"><summary>Leer información completa</summary>${CONS_INFO}</details>`:''}</div>`;
   return `<div class="f${w}"${dep}><label>${esc(f.l)}</label>${inputHTML(f)}${f.h?`<small style="font-size:11px;color:var(--muted)">${esc(f.h)}</small>`:''}</div>`;
 }
 function painHTML(){
@@ -793,7 +818,11 @@ function tecBlocks(){const t=SETTINGS.tech||'';if(!/^##\s/m.test(t))return null;
 function buildTecList(){let d=$('#dl-tec');if(!d){d=document.createElement('datalist');d.id='dl-tec';document.body.appendChild(d);}
   const names=new Set(Object.keys(tecBlocks()||{}));const lt=LS.get('last_tecnico');if(lt)names.add(lt);
   d.innerHTML=[...names].map(n=>`<option value="${esc(n)}">`).join('');}
-function renderForm(){
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.name==='cons-r'){const cb=document.querySelector('input[data-k="consent"]');if(cb&&cb.checked!==(t.value==='1')){cb.checked=t.value==='1';cb.dispatchEvent(new Event('input',{bubbles:true}));cb.dispatchEvent(new Event('change',{bubbles:true}));}}
+  else if(t.dataset&&t.dataset.k==='consent')consSync();});
+function consSync(){const cb=document.querySelector('input[data-k="consent"]');if(!cb)return;document.querySelectorAll('input[name="cons-r"]').forEach(r=>r.checked=(r.value==='1')===cb.checked&&(cb.checked||cb.dataset.touched==='1'||true));}
+function renderForm(){setTimeout(consSync,0);
   const toc=[],out=[];
   const simple=MODE()==='simple';
   (simple?SIMPLE_SECTIONS:SECTIONS).forEach(s0=>{
