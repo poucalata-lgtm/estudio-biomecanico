@@ -260,6 +260,7 @@ body.pdfcap .repwrap{display:block;padding:0}
       <label class="btn"><input type="checkbox" id="opt-ann"> Mostrar ángulos y líneas en las imágenes</label>
     </div>
     <div id="report"></div>
+    <div class="reptools" id="reptools2" style="margin-top:14px"></div>
   </div>
 </div>
 
@@ -894,6 +895,8 @@ function modDone(c){const t=modText(c);return !!t&&!NOCHANGE.test(t);}
 /* ---------- imágenes ---------- */
 let imgTarget=null;
 // Parejas para el informe: [inicial, final] con el mismo pie sin "inicial/final" (90 con 90, 180 con 180). Primero 90, luego 180, luego el resto.
+const REP_MIDOFF=new Set();   // tomas intermedias ocultas en el informe (caso:grupo)
+const midKey=g=>(CUR&&CUR.id)+':'+g;
 const repImg=i=>$('#opt-ann').checked||!i.base?i.src:i.base;   // sin trazos: imagen original
 function imgPairs(){
   const key=c=>(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|antes|despues)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
@@ -902,7 +905,7 @@ function imgPairs(){
   const rank=k=>/^90\b/.test(k)?0:/^180\b/.test(k)?1:2; rows.sort((a,b)=>rank(a.k)-rank(b.k));
   const out=[];rows.forEach(r=>{for(let j=0;j<Math.max(r.ini.length,r.fin.length);j++)out.push([r.ini[j]||null,r.fin[j]||null]);});
   const mids={};CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').forEach(i=>(mids[i.g||0]=mids[i.g||0]||[]).push(i));
-  Object.keys(mids).sort((a,b)=>a-b).forEach(g=>{const L=mids[g].sort((a,b)=>rank(key(a.cap))-rank(key(b.cap)));for(let j=0;j<L.length;j+=2)out.push([L[j],L[j+1]||null]);});
+  Object.keys(mids).sort((a,b)=>a-b).filter(g=>!REP_MIDOFF.has(midKey(g))).forEach(g=>{const L=mids[g].sort((a,b)=>rank(key(a.cap))-rank(key(b.cap)));for(let j=0;j<L.length;j+=2)out.push([L[j],L[j+1]||null]);});
   return out;}
 function imgPhase(im){return im.ph||(/final|post/i.test(im.cap||'')?'fin':'ini');}
 // Toma a la que pertenece una imagen: inicial, final o cada toma intermedia (mid:1, mid:2…). Cada toma usa su propia grabación.
@@ -985,7 +988,13 @@ async function downloadPDF(){
 }
 // En pantalla el informe lleva el nombre; al descargar el PDF o imprimir se sustituye por el código BIO.
 let REP_ANON=false;
-function renderReport(){
+function renderRepTools2(){const b=$('#reptools2');if(!b||!CUR)return;
+  const gs=[...new Set(CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').map(i=>i.g||0))].sort((x,y)=>x-y);
+  b.innerHTML=`<label class="btn"><input type="checkbox" id="opt-ann2" ${$('#opt-ann').checked?'checked':''}> Mostrar ángulos y líneas en las imágenes</label>`+
+    gs.map(g=>`<label class="btn"><input type="checkbox" data-midg="${g}" ${REP_MIDOFF.has(midKey(g))?'':'checked'}> Incluir toma intermedia ${g}</label>`).join('');
+  $('#opt-ann2').onchange=e=>{$('#opt-ann').checked=e.target.checked;renderReport();};
+  b.querySelectorAll('[data-midg]').forEach(x=>x.onchange=()=>{const k=midKey(x.dataset.midg);if(x.checked)REP_MIDOFF.delete(k);else REP_MIDOFF.add(k);renderReport();});}
+function renderReport(){setTimeout(renderRepTools2,0);
   const v=CUR.v, S=SETTINGS;
   document.documentElement.style.setProperty('--rep',S.color||'#009FE3');
   const fecha=v.fecha?new Date(v.fecha+'T12:00').toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'}):'';
