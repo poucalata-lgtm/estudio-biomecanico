@@ -258,6 +258,7 @@ body.pdfcap .repwrap{display:block;padding:0}
       <label class="btn"><input type="checkbox" id="opt-retul"> Incluir tabla de ángulos dinámicos</label>
       <label class="btn"><input type="checkbox" id="opt-meas"> Incluir tabla de medidas</label>
       <label class="btn"><input type="checkbox" id="opt-ann"> Mostrar ángulos y líneas en las imágenes</label>
+      <label class="btn"><input type="checkbox" id="opt-dual"> Incluir pre-post sin y con marcadores</label>
     </div>
     <div id="report"></div>
     <div class="reptools" id="reptools2" style="margin-top:14px"></div>
@@ -897,7 +898,9 @@ let imgTarget=null;
 // Parejas para el informe: [inicial, final] con el mismo pie sin "inicial/final" (90 con 90, 180 con 180). Primero 90, luego 180, luego el resto.
 const REP_MIDOFF=new Set();   // tomas intermedias ocultas en el informe (caso:grupo)
 const midKey=g=>(CUR&&CUR.id)+':'+g;
-const repImg=i=>$('#opt-ann').checked||!i.base?i.src:i.base;   // sin trazos: imagen original
+const repAnn=m=>m==='a'||(m!=='c'&&$('#opt-ann').checked);
+const repImg=(i,m)=>repAnn(m)||!i.base?i.src:i.base;
+const repFlip=(i,m)=>!repAnn(m)&&i.base&&i.ann&&i.ann.flip;   // sin trazos: imagen original
 function imgPairs(){
   const key=c=>(c||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(iniciales|inicial|finales|final|pre|post|pos|antes|despues)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
   const rows=[];const get=k=>{let r=rows.find(r=>r.k===k);if(!r){r={k,ini:[],fin:[]};rows.push(r);}return r;};
@@ -990,9 +993,10 @@ async function downloadPDF(){
 let REP_ANON=false;
 function renderRepTools2(){const b=$('#reptools2');if(!b||!CUR)return;
   const gs=[...new Set(CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').map(i=>i.g||0))].sort((x,y)=>x-y);
-  b.innerHTML=`<label class="btn"><input type="checkbox" id="opt-ann2" ${$('#opt-ann').checked?'checked':''}> Mostrar ángulos y líneas en las imágenes</label>`+
+  b.innerHTML=`<label class="btn"><input type="checkbox" id="opt-ann2" ${$('#opt-ann').checked?'checked':''}> Mostrar ángulos y líneas en las imágenes</label><label class="btn"><input type="checkbox" id="opt-dual2" ${$('#opt-dual').checked?'checked':''}> Incluir pre-post sin y con marcadores</label>`+
     gs.map(g=>`<label class="btn"><input type="checkbox" data-midg="${g}" ${REP_MIDOFF.has(midKey(g))?'':'checked'}> Incluir toma intermedia ${g}</label>`).join('');
   $('#opt-ann2').onchange=e=>{$('#opt-ann').checked=e.target.checked;renderReport();};
+  $('#opt-dual2').onchange=e=>{$('#opt-dual').checked=e.target.checked;renderReport();};
   b.querySelectorAll('[data-midg]').forEach(x=>x.onchange=()=>{const k=midKey(x.dataset.midg);if(x.checked)REP_MIDOFF.delete(k);else REP_MIDOFF.add(k);renderReport();});}
 function renderReport(){setTimeout(renderRepTools2,0);
   const v=CUR.v, S=SETTINGS;
@@ -1031,7 +1035,9 @@ function renderReport(){setTimeout(renderRepTools2,0);
       dynRows.map(([c,l,u])=>`<tr><td>${esc(l)} (${u})</td>${['pre_i','pre_d','post_i','post_d'].map(s=>`<td>${fmt(num(v[`r_${c}_${s}`]),1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
   const mods=MODS.map(([c,l])=>line(l,modText(c)));
-  const pairs=imgPairs();
+  const pairs=(()=>{const P=imgPairs().map(p=>({p}));if(!$('#opt-dual').checked)return P;
+    const isMid=x=>x.p.some(i=>i&&imgPhase(i)==='mid'),B=P.filter(x=>!isMid(x));
+    return [...B.map(x=>({p:x.p,m:'c'})),...B.map(x=>({p:x.p,m:'a'})),...P.filter(isMid)];})();
 
   $('#report').innerHTML=`
   <div class="rp">
@@ -1077,7 +1083,7 @@ function renderReport(){setTimeout(renderRepTools2,0);
     ${block('Resumen de modificaciones realizadas',mods)}
     ${block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:''])}
     `}
-    ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(pr=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}</div><img src="${repImg(i)}"${!$('#opt-ann').checked&&i.base&&i.ann&&i.ann.flip?' style="transform:scaleX(-1)"':''}></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
+    ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(({p:pr,m})=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}${m==='c'?' · sin marcadores':m==='a'?' · con marcadores':''}</div><img src="${repImg(i,m)}"${repFlip(i,m)?' style="transform:scaleX(-1)"':''}></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
     <div class="r-foot">${esc(S.footer)}</div>
     <div class="r-ref">Ref. ${esc(CUR.id)}</div>
   </div>`;
@@ -1960,6 +1966,19 @@ function label(c,txt,pos,col,u,rec){
 }
 function tag(c,txt,q,u){c.font=`600 ${u*5.6}px Roboto, Arial, sans-serif`;c.textAlign='left';c.textBaseline='middle';
   c.lineWidth=u*1.2;c.strokeStyle='rgba(0,0,0,.8)';c.strokeText(txt,q[0]+u*3,q[1]-u*3);c.fillStyle='#fff';c.fillText(txt,q[0]+u*3,q[1]-u*3);}
+// Etiquetas del modelo Bici en los márgenes izquierdo y derecho, a la altura de su ángulo, con una línea guía
+function bikeLabels(c,Q,u,off,rec){
+  const m=u*3,h=u*10,gap=u*1.5;c.font=`700 ${u*7.2}px Roboto, Arial, sans-serif`;
+  Q.forEach(q=>{q.w=c.measureText(q.txt).width+u*5;q.left=q.pos[0]<ANG.W/2;q.y=q.pos[1];});
+  [true,false].forEach(side=>{const S=Q.filter(q=>q.left===side).sort((a,b)=>a.y-b.y);
+    for(let k=1;k<S.length;k++)if(S[k].y<S[k-1].y+h+gap)S[k].y=S[k-1].y+h+gap;   // sin solaparse
+    const over=S.length?S[S.length-1].y+h/2-(ANG.H-m):0;if(over>0)S.forEach(q=>q.y-=over);
+    for(let k=S.length-2;k>=0;k--)if(S[k].y>S[k+1].y-h-gap)S[k].y=S[k+1].y-h-gap;
+    S.forEach(q=>{q.y=Math.max(h/2+m,q.y);});});
+  Q.forEach(q=>{const o=off(q.key),x=(q.left?m+q.w/2:ANG.W-m-q.w/2)+o[0],y=q.y+o[1],ex=q.left?x+q.w/2:x-q.w/2;
+    c.setLineDash([u*1.5,u*1.5]);c.strokeStyle=q.col;c.globalAlpha=.75;c.lineWidth=u*.5;c.beginPath();c.moveTo(q.pos[0],q.pos[1]);c.lineTo(ex,y);c.stroke();c.setLineDash([]);c.globalAlpha=1;
+    label(c,q.txt,[x,y],q.col,u,rec(q.key));});
+}
 function drawShape(c,s,u,o){
   o=o||{};const pv=o.preview||null;
   const rec=o.rec!=null?(key=>r=>ANG.hits.push(Object.assign({si:o.rec,key},r))):(()=>null);
@@ -1976,32 +1995,34 @@ function drawShape(c,s,u,o){
     if(Q2){seg(c,P,Q2,col,u,!Q);const t={p:[P,Q2],cal:Q?s.cal:0};L(lineText(t,angScale()),'l',[(P[0]+Q2[0])/2,(P[1]+Q2[1])/2-u*9],col);}
     s.p.forEach(q=>dot(c,q,col,u));
   }else if(s.t==='bike'){
+    const Q=[],LB=(txt,key,pos,col)=>Q.push({txt,key,pos,col});
     const P=bikePts(s),f=bikeFacing(P),M=Object.fromEntries(bikeMeasures(s).map(m=>[m.key,m]));
     BIKE_SEG.forEach(([a,b,col])=>{if(P[a]&&P[b])seg(c,P[a],P[b],col,u);});
     if(pv&&s.p.length<10)seg(c,s.p[s.p.length-1],pv,'#ffffff',u,true);
     const fwd=f>0?0:Math.PI;
     if(M.kops){const top=Math.min(P.rodilla[1],P.puntera[1])-u*14;seg(c,P.puntera,[P.puntera[0],top],BIKE_COL.kops,u,true);   // primero, para que no tache las etiquetas
-      L(measShort(M.kops),'kops',[P.puntera[0],top-u*6],BIKE_COL.kops);}
+      LB(measShort(M.kops),'kops',[P.puntera[0],top-u*6],BIKE_COL.kops);}
     if(M.tronco){const len=Math.max(u*30,dist(P.troc,P.hombro)*.75);seg(c,P.troc,[P.troc[0]+f*len,P.troc[1]],BIKE_COL.tronco,u,true);
       wedge(c,P.troc,fwd,sweep(fwd,ang2(P.troc,P.hombro)),Math.min(u*24,len*.6),BIKE_COL.tronco,u);
-      L(measShort(M.tronco),'tronco',[P.troc[0]+f*(len+u*16),P.troc[1]],BIKE_COL.tronco);}   // etiqueta al final de la horizontal, sin pisar la de cadera
-    if(M.cadera)L(measShort(M.cadera),'cadera',interior(c,P.troc,P.l5,P.rodilla,arcR(P.troc,P.l5,P.rodilla,u,12),BIKE_COL.cadera,u),BIKE_COL.cadera);
+      LB(measShort(M.tronco),'tronco',[P.troc[0]+f*(len+u*16),P.troc[1]],BIKE_COL.tronco);}   // etiqueta al final de la horizontal, sin pisar la de cadera
+    if(M.cadera)LB(measShort(M.cadera),'cadera',interior(c,P.troc,P.l5,P.rodilla,arcR(P.troc,P.l5,P.rodilla,u,12),BIKE_COL.cadera,u),BIKE_COL.cadera);
     if(M.lumbar){const a1=ang2(P.troc,P.l5),ext=[P.l5[0]+Math.cos(a1)*u*22,P.l5[1]+Math.sin(a1)*u*22];seg(c,P.l5,ext,BIKE_COL.lumbar,u,true);
       wedge(c,P.l5,a1,sweep(a1,ang2(P.l5,P.hombro)),u*12,BIKE_COL.lumbar,u);
       const T=[f*(P.hombro[0]-P.troc[0]),-(P.hombro[1]-P.troc[1])],n=Math.hypot(...T)||1,back=[f*(-T[1])/n,-(T[0])/n];
-      L(measShort(M.lumbar),'lumbar',[P.l5[0]+back[0]*u*20,P.l5[1]+back[1]*u*20],BIKE_COL.lumbar);}
+      LB(measShort(M.lumbar),'lumbar',[P.l5[0]+back[0]*u*20,P.l5[1]+back[1]*u*20],BIKE_COL.lumbar);}
     if(M.cuello){const B=P.l5||P.troc,a1=ang2(B,P.hombro),len=Math.max(u*20,dist(P.hombro,P.cabeza)*.9),ext=[P.hombro[0]+Math.cos(a1)*len,P.hombro[1]+Math.sin(a1)*len];
       seg(c,P.hombro,ext,BIKE_COL.cuello,u,true);
-      L(measShort(M.cuello),'cuello',wedge(c,P.hombro,a1,sweep(a1,ang2(P.hombro,P.cabeza)),Math.min(u*18,len*.7),BIKE_COL.cuello,u),BIKE_COL.cuello);}
-    if(M.hombro)L(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
+      LB(measShort(M.cuello),'cuello',wedge(c,P.hombro,a1,sweep(a1,ang2(P.hombro,P.cabeza)),Math.min(u*18,len*.7),BIKE_COL.cuello,u),BIKE_COL.cuello);}
+    if(M.hombro)LB(measShort(M.hombro),'hombro',interior(c,P.hombro,P.troc,P.codo,arcR(P.hombro,P.troc,P.codo,u,10),BIKE_COL.hombro,u),BIKE_COL.hombro);
     // Flexión: prolongación discontinua del segmento proximal y sector hasta el segmento distal
-    if(M.codo)L(measShort(M.codo),'codo',flexArc(c,P.hombro,P.codo,P.mano,BIKE_COL.codo,u,10),BIKE_COL.codo);
-    if(M.rodilla){const t=measShort(M.rodilla);L(t,'rodilla',flexIn(c,P.troc,P.rodilla,P.tobillo,BIKE_COL.rodilla,u,12,t),BIKE_COL.rodilla);}   // detrás de la rodilla
-    if(M.tobillo){const t=measShort(M.tobillo);L(t,'tobillo',flexIn(c,P.rodilla,P.tobillo,P.puntera,BIKE_COL.tobillo,u,10,t),BIKE_COL.tobillo);}   // vértice en el maléolo, delante entre pierna y pie
+    if(M.codo)LB(measShort(M.codo),'codo',flexArc(c,P.hombro,P.codo,P.mano,BIKE_COL.codo,u,10),BIKE_COL.codo);
+    if(M.rodilla){const t=measShort(M.rodilla);LB(t,'rodilla',flexIn(c,P.troc,P.rodilla,P.tobillo,BIKE_COL.rodilla,u,12,t),BIKE_COL.rodilla);}   // detrás de la rodilla
+    if(M.tobillo){const t=measShort(M.tobillo);LB(t,'tobillo',flexIn(c,P.rodilla,P.tobillo,P.puntera,BIKE_COL.tobillo,u,10,t),BIKE_COL.tobillo);}   // vértice en el maléolo, delante entre pierna y pie
     if(M.pie){   // horizontal discontinua desde la puntera hacia atrás y ángulo con la línea puntera–talón
       const col=BIKE_COL.pie,fl=dist(P.talon,P.puntera),len=Math.max(u*16,fl*1.15),bwd=f>0?Math.PI:0;
       seg(c,P.puntera,[P.puntera[0]-f*len,P.puntera[1]],col,u,true);
-      const p0=wedge(c,P.puntera,bwd,sweep(bwd,ang2(P.puntera,P.talon)),Math.max(u*6,Math.min(u*16,fl*.55)),col,u);L(measShort(M.pie),'pie',[p0[0],p0[1]+u*9],col);}
+      const p0=wedge(c,P.puntera,bwd,sweep(bwd,ang2(P.puntera,P.talon)),Math.max(u*6,Math.min(u*16,fl*.55)),col,u);LB(measShort(M.pie),'pie',[p0[0],p0[1]+u*9],col);}
+    bikeLabels(c,Q,u,off,rec);
     s.p.forEach(q=>dot(c,q,'#ffffff',u));
     if(o.tags)s.p.forEach((q,k)=>tag(c,BIKE_PTS[k][1],q,u));
   }
@@ -2260,7 +2281,7 @@ async function init(){
   if(GD.available&&new URLSearchParams(location.search).get('carpeta')) showView('cases');
   $('#b-pdf').onclick=downloadPDF;
   bindCapture();
-  $('#opt-retul').onchange=renderReport; $('#opt-meas').onchange=renderReport; $('#opt-ann').onchange=renderReport;
+  $('#opt-retul').onchange=renderReport; $('#opt-meas').onchange=renderReport; $('#opt-ann').onchange=renderReport; $('#opt-dual').onchange=renderReport;
   $('#m-settings').onclick=e=>{if(e.target.id==='m-settings')closeModal();};
   window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue='';}});
   window.addEventListener('beforeprint',()=>{document.title=pdfName().replace(/\.pdf$/,'');});
