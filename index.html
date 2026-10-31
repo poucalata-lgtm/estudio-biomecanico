@@ -271,7 +271,7 @@ body.pdfcap .repwrap{display:block;padding:0}
       <div id="drive-body"></div>
     </div>
     <div id="dlist-wrap" style="margin-bottom:16px">
-      <input type="text" id="dq" placeholder="Buscar en Drive: nombre, código o técnico…" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:100%;max-width:420px;margin-bottom:8px">
+      <input type="text" id="dq" placeholder="Buscar en Drive: nombre, código BIO o técnico…" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:100%;max-width:420px;margin-bottom:8px">
       <div class="tw"><table class="list" id="dlist" style="display:none"></table></div>
     </div>
     <div class="dbbox" id="xl-local">
@@ -1325,10 +1325,10 @@ async function openCase(id){
 async function renderList(){
   const q=($('#q').value||'').toLowerCase();
   const all=(await DB.all('cases')).sort((a,b)=>(b.v.fecha||'').localeCompare(a.v.fecha||'')||(b.updated||'').localeCompare(a.updated||''));
-  const rows=all.filter(c=>!q||(c.v.nombre||'').toLowerCase().includes(q)||c.id.toLowerCase().includes(q));
+  const rows=all.filter(c=>!q||(c.v.nombre||'').toLowerCase().includes(q)||c.id.toLowerCase().includes(q)||bioCode(c.v).toLowerCase().includes(q));
   $('#list').innerHTML=`<thead><tr><th>Fecha</th><th>Ciclista</th><th>Código</th><th>Motivo</th><th>Seguimiento</th><th>Excel</th><th></th></tr></thead><tbody>${
    rows.map(c=>{const segOK=!!c.v.seg_fecha;const xlOK=c.xl&&c.updated&&c.xl>=c.updated;
-    return `<tr><td>${esc(c.v.fecha||'')}</td><td><b>${esc(c.v.nombre||'(sin nombre)')}</b>${c.v.modo==='simple'?' <span class="pill">simplificada</span>':''}</td><td style="font-variant-numeric:tabular-nums">${esc(c.id)}</td>
+    return `<tr><td>${esc(c.v.fecha||'')}</td><td><b>${esc((c.v.nombre||'').trim().split(/\s+/)[0]||'(sin nombre)')}</b> <span style="font-variant-numeric:tabular-nums;color:var(--muted)">${esc(bioCode(c.v))}</span>${c.v.modo==='simple'?' <span class="pill">simplificada</span>':''}</td><td style="font-variant-numeric:tabular-nums">${esc(c.id)}</td>
     <td>${esc((c.v.motivo_txt||'').slice(0,50))}</td>
     <td>${segOK?'<span class="pill ok">hecho</span>':'<span class="pill w">pendiente</span>'}</td>
     <td>${!c.v.consent?'<span class="pill">sin consent.</span>':xlOK?'<span class="pill ok">al día</span>':c.xl?'<span class="pill w">desactualizado</span>':'<span class="pill w">no registrado</span>'}</td>
@@ -1512,7 +1512,7 @@ async function driveRefreshList(){
 }
 function caseProps(c){
   const cut=(s,n)=>String(s||'').slice(0,n);
-  return {cid:c.id,nombre:cut(c.v.nombre,40),fecha:cut(c.v.fecha,10),tecnico:cut(c.v.tecnico,30),seg:c.v.seg_fecha?'1':'0',modo:c.v.modo||'full'};
+  return {cid:c.id,nombre:cut(c.v.nombre,40),fecha:cut(c.v.fecha,10),tecnico:cut(c.v.tecnico,30),seg:c.v.seg_fecha?'1':'0',modo:c.v.modo||'full',bio:cut(bioCode(c.v),20)};
 }
 async function driveSaveCase(c){
   let target=null;
@@ -1620,12 +1620,12 @@ function renderDriveList(){
   if(!GD.ok){t.style.display='none';return;}
   t.style.display='';
   const q=($('#dq').value||'').toLowerCase();
-  const rows=GD.files.map(f=>{const p=f.appProperties||{};return {f,p,cid:p.cid||(f.name.split(' - ')[0]),nombre:p.nombre||f.name.replace(/^.*? - /,'').replace(/\.json$/,'')};})
-    .filter(r=>!q||r.nombre.toLowerCase().includes(q)||r.cid.toLowerCase().includes(q)||(r.p.tecnico||'').toLowerCase().includes(q))
+  const rows=GD.files.map(f=>{const p=f.appProperties||{};const r={f,p,cid:p.cid||(f.name.split(' - ')[0]),nombre:p.nombre||f.name.replace(/^.*? - /,'').replace(/\.json$/,'')};r.bio=p.bio||bioCode({nombre:r.nombre});r.pila=(r.nombre||'').trim().split(/\s+/)[0]||'(sin nombre)';return r;})
+    .filter(r=>!q||r.nombre.toLowerCase().includes(q)||r.bio.toLowerCase().includes(q)||r.cid.toLowerCase().includes(q)||(r.p.tecnico||'').toLowerCase().includes(q))
     .sort((a,b)=>(b.p.fecha||'').localeCompare(a.p.fecha||'')||b.f.modifiedTime.localeCompare(a.f.modifiedTime));
   t.innerHTML=`<thead><tr><th>Fecha</th><th>Ciclista</th><th>Técnico</th><th>Seguimiento</th><th>Última modificación</th><th></th></tr></thead><tbody>${
     rows.map(r=>`<tr data-drow="${r.f.id}" style="cursor:pointer${CUR&&r.cid===CUR.id?';background:#f3f8ff':''}"><td>${esc(r.p.fecha||'')}</td>
-      <td><b>${esc(r.nombre)}</b>${r.p.modo==='simple'?' <span class="pill">simplificada</span>':''}<br><small style="color:var(--muted);font-variant-numeric:tabular-nums">${esc(r.cid)}</small></td>
+      <td><b>${esc(r.pila)}</b> <span style="font-variant-numeric:tabular-nums;color:var(--muted)">${esc(r.bio)}</span>${r.p.modo==='simple'?' <span class="pill">simplificada</span>':''}<br><small style="color:var(--muted);font-variant-numeric:tabular-nums">${esc(r.cid)}</small></td>
       <td>${esc(r.p.tecnico||'')}</td>
       <td>${r.p.seg==='1'?'<span class="pill ok">hecho</span>':'<span class="pill w">pendiente</span>'}</td>
       <td><small>${new Date(r.f.modifiedTime).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}<br>${esc(whoName(r.f.lastModifyingUser))}</small></td>
