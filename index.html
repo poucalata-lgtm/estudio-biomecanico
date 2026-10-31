@@ -170,6 +170,8 @@ table.list tr:hover td{background:#fafcff}
 /* =================== INFORME =================== */
 .repwrap{padding:24px 0 80px;display:flex;flex-direction:column;align-items:center;gap:10px}
 .more>summary{cursor:pointer;color:var(--accent,#1d4ed8);font-weight:600;padding:4px 0}
+.f.red>label,.f.red>label:first-child{color:#dc2626!important;font-weight:700}
+.r-prest{color:#dc2626;margin-top:2mm}
 .cons-info{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45}.cons-info summary{cursor:pointer;color:var(--accent,#1d4ed8);font-size:12.5px}
 .cons-info h4{font-size:12.5px;margin:10px 0 3px;color:var(--ink)}.cons-info p,.cons-info ul{margin:0 0 6px}.cons-opt{display:flex;gap:8px;align-items:flex-start;margin:6px 0;color:var(--ink)}
 .reptools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
@@ -593,6 +595,8 @@ const SECTIONS=[
  {id:'mod',title:'Modificaciones realizadas',custom:'mods'},
  {id:'medpost',title:'Medidas post',custom:'measpost'},
  {id:'comppost',title:'Componentes nuevos o probados',note:'Solo hace falta rellenar lo que cambie: marca el componente en «Componentes cambiados» y aparecerán sus campos. Lo que no cambia se da por igual que en el pre.',fields:[
+  {k:'prestado',l:'Material prestado',t:'check',x:0,w:3,cls:'red'},
+  {k:'prest_txt',dep:['prestado','true'],l:'Material prestado a devolver o adquirir',t:'textarea',x:0,w:3,ph:'Por ejemplo: sillín Prologo Dimension 143 mm · 87 € PVP en Deporvillage / Decathlon'},
   {k:'p_sil_modelo',dep:['comp__SILLIN','true'],l:'Sillín nuevo: marca y modelo',t:'text',x:1,w:2},
   {k:'p_sil_anc',dep:['comp__SILLIN','true'],l:'Sillín nuevo: ancho',t:'num',u:'mm',x:1},
   {k:'p_sil_acolch',dep:['comp__SILLIN','true'],l:'Acolchado respecto al anterior',t:'select',x:1,o:[['BLANDO','Más blando'],['IGUAL','Igual'],['DURO','Más duro']]},
@@ -610,6 +614,7 @@ const SECTIONS=[
  {id:'capfin',title:'Capturas finales',custom:'capfin'},
  {id:'rec',title:'Recomendaciones',fields:[
   {k:'rec_txt',l:'Recomendaciones generales (texto del informe)',t:'textarea',x:0,w:3,rows:7},
+  {k:'prest_msg',dep:['prestado','true'],l:'* Aviso de material prestado (sale en rojo en el informe; vacío = texto estándar + el material anotado en Medidas finales)',cls:'red',t:'textarea',x:0,w:3,ph:'El siguiente material se le ha prestado y deberá ser devuelto, o abonado su precio (detallado a continuación), en el plazo acordado durante el estudio o, como máximo, en un mes desde la fecha de realización del estudio:'},
   {k:'ej',l:'Ejercicios pautados — para análisis',t:'multi',x:1,w:3,o:[['CUAD','Estiramiento cuádriceps'],['ISQ','Estiramiento isquiosurales'],['GEM','Gemelo / sóleo'],['TOB','Movilidad de tobillo'],['CAD','Movilidad de cadera'],['PSOAS','Flexores de cadera'],['GLUT','Fuerza glúteo'],['CORE','Core'],['TOR','Movilidad torácica'],['PIE','Fuerza intrínseca pie']]},
   {k:'ej_txt',l:'Ejercicios propuestos (texto del informe)',t:'textarea',x:1,w:3},
   {k:'deriv',l:'Derivación',t:'multi',x:1,w:3,o:[['FISIO','Fisioterapeuta'],['PODO','Podólogo'],['MED','Médico'],['ENTR','Entrenador']]},
@@ -686,8 +691,9 @@ const SIMPLE_SECTIONS=[
   {k:'m_pot_ang_post',dep:['comp__POTENCIA','true'],l:'Potencia nueva: grados (si se conocen)',t:'num',u:'º',h:'Sin signo'},
   {k:'m_man_anc_post',dep:['comp__MANILLAR','true'],l:'Manillar nuevo: ancho',t:'num',u:'cm'},
   {k:'m_biela_post',dep:['comp__BIELAS','true'],l:'Bielas nuevas: longitud',t:'num',u:'mm'},
+  'prestado','prest_txt',
   'p_sil_modelo','p_sil_anc','p_sil_acolch','p_sil_estr','p_sil_perfil','p_sil_long','p_sil_agujero','p_pot_modelo','p_man_desc','p_calas','p_tija_ret','p_tija_retmm','p_probados']},
- {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
+ {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},'prest_msg',{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
 ]; SECTIONS.forEach(s=>(s.fields||[]).forEach(f=>FIELDS[f.k]=f));
 
 /* ====================================================================
@@ -764,7 +770,7 @@ function inputHTML(f){
     case 'date': return `<input type="date" data-k="${k}">`;
     case 'num': case 'numr':
       return `<div class="unit"><input type="text" inputmode="decimal" data-k="${k}"${ph}>${f.u?`<span>${esc(f.u)}</span>`:''}</div>`;
-    case 'textarea': return `<textarea data-k="${k}" rows="${f.rows||3}"></textarea>`;
+    case 'textarea': return `<textarea data-k="${k}" rows="${f.rows||3}"${ph}></textarea>`;
     case 'select': return `<select data-k="${k}"><option value=""></option>${f.o.map(o=>`<option value="${o[0]}">${esc(o[1])}</option>`).join('')}</select>`;
     case 'scale': return `<select data-k="${k}"><option value=""></option>${[...Array(11).keys()].map(i=>`<option>${i}</option>`).join('')}</select>`;
     case 'yn': if(f.dd) return `<select data-k="${k}"><option value=""></option><option value="1">Sí</option><option value="0">No</option></select>`;
@@ -802,8 +808,8 @@ function fieldHTML(f){
   const w=f.w===3?' w3':f.w===2?' w2':'';
   const dep=f.dep?` data-dep="${f.dep[0]}" data-depv="${f.dep[1]}"`:'';
   if(f.t==='sub') return `<div class="subh" style="grid-column:1/-1;margin:8px 0 0">${esc(f.l)}</div>`;
-  if(f.t==='check') return `<div class="f${w}"${dep}>${inputHTML(f)}${f.info?`<details class="cons-info"><summary>Leer información completa</summary>${CONS_INFO}</details>`:''}</div>`;
-  return `<div class="f${w}"${dep}><label>${esc(f.l)}</label>${inputHTML(f)}${f.h?`<small style="font-size:11px;color:var(--muted)">${esc(f.h)}</small>`:''}</div>`;
+  if(f.t==='check') return `<div class="f${w}${f.cls?' '+f.cls:''}"${dep}>${inputHTML(f)}${f.info?`<details class="cons-info"><summary>Leer información completa</summary>${CONS_INFO}</details>`:''}</div>`;
+  return `<div class="f${w}${f.cls?' '+f.cls:''}"${dep}><label>${esc(f.l)}</label>${inputHTML(f)}${f.h?`<small style="font-size:11px;color:var(--muted)">${esc(f.h)}</small>`:''}</div>`;
 }
 function painHTML(){
   const opt=(o)=>`<option value=""></option>`+o.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');
@@ -1027,6 +1033,8 @@ function rv(k){const f=FIELDS[k],v=CUR.v[k];
   return String(v);}
 function line(label,val){return val?`<p>- ${label?esc(label)+': ':''}${esc(val).replace(/\n/g,'<br>')}</p>`:'';}
 function block(title,lines){const b=lines.filter(Boolean).join('');return b?`<div class="r-sec"><h4>${esc(title)}</h4>${b}</div>`:'';}
+const PREST_MSG='El siguiente material se le ha prestado y deberá ser devuelto, o abonado su precio (detallado a continuación), en el plazo acordado durante el estudio o, como máximo, en un mes desde la fecha de realización del estudio:';
+function prestHTML(v){if(!v.prestado)return '';return `<p class="r-prest"><b>* ${esc((v.prest_msg||'').trim()||PREST_MSG)}</b>${v.prest_txt?'<br>'+esc(v.prest_txt).replace(/\n/g,'<br>'):''}</p>`;}
 function para(t){return t?`<p>${esc(t).replace(/\n/g,'<br>')}</p>`:''}
 
 function simpleBody(v){
@@ -1041,7 +1049,7 @@ function simpleBody(v){
    +block('Hipótesis biomecánica',[para(v.hip_txt?'- '+v.hip_txt:'')])
    +block('Resumen de modificaciones realizadas',MODS.filter(m=>m[0]!=='otros').map(([c,l])=>line(l,modText(c))))
    +block('Medidas finales',[ml('Altura de sillín en cm',mtxt(v,'sil_alt','post',2),N.sil_alt),ml('Alcance en cm',mtxt(v,'alc','post',2),N.alc)])
-   +block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:'']);
+   +block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:'',prestHTML(v)]);
 }
 function pdfName(){
   const v=CUR.v; const slug=t=>(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
@@ -1156,7 +1164,7 @@ function renderReport(){setTimeout(renderRepTools2,0);
     ${dynHTMLr}
     ${block('Hipótesis biomecánica',[para(v.hip_txt?'- '+v.hip_txt:(rv('hip')?'- '+rv('hip'):''))])}
     ${block('Resumen de modificaciones realizadas',mods)}
-    ${block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:''])}
+    ${block('Recomendaciones',[para(v.rec_txt),v.ej_txt?`<p style="margin-top:2mm">${esc(v.ej_txt).replace(/\n/g,'<br>')}</p>`:'',prestHTML(v)])}
     `}
     ${pairs.length?`<div class="pb"></div><div class="r-bar big">Imágenes</div><div class="r-pairs">${pairs.map(({p:pr,m})=>`<div class="r-pair">${pr.map(i=>i?`<div class="r-img"><div class="r-bar">${esc(i.cap)}${m==='c'?' · sin marcadores':m==='a'?' · con marcadores':''}</div><img src="${repImg(i,m)}"${repFlip(i,m)?' style="transform:scaleX(-1)"':''}></div>`:'<div></div>').join('')}</div>`).join('')}</div>`:''}
     <div class="r-foot">${esc(S.footer)}</div>
