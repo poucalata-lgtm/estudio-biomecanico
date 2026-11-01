@@ -890,8 +890,8 @@ document.addEventListener('change',e=>{const t=e.target;
 // Al marcar «Material prestado» se rellenan el aviso y un ejemplo como texto editable (solo si están vacíos)
 function prestFill(){if(!CUR||!CUR.v.prestado)return;const v=CUR.v,set=(k,d)=>{v[k]=d;document.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{el.value=d;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});};
   const old=(v.prest_msg||'').trim();
-  if(!old||(old.length<40&&!/prestad/i.test(old))){if(old&&(!(v.prest_txt||'').trim()||v.prest_txt===PREST_EJ))set('prest_txt',old);else if(!(v.prest_txt||'').trim())set('prest_txt',PREST_EJ);set('prest_msg',PREST_MSG);}
-  else if(!(v.prest_txt||'').trim())set('prest_txt',PREST_EJ);
+  if(!old||(old.length<40&&!/prestad/i.test(old)))set('prest_msg',PREST_MSG);
+  if((v.prest_txt||'').trim().length<10)set('prest_txt',PREST_EJ);   // vacío o un apunte suelto (p. ej. «sillin») → ejemplo editable
   if(!v.prest_estado)set('prest_estado','PEND');}
 function consSync(){const cb=document.querySelector('input[data-k="consent"]');if(!cb)return;document.querySelectorAll('input[name="cons-r"]').forEach(r=>r.checked=(r.value==='1')===cb.checked&&(cb.checked||cb.dataset.touched==='1'||true));}
 function renderForm(){setTimeout(consSync,0);setTimeout(prestFill,0);
