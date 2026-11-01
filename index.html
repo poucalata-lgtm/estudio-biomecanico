@@ -597,7 +597,7 @@ const SECTIONS=[
  {id:'medpost',title:'Medidas post',custom:'measpost'},
  {id:'comppost',title:'Componentes nuevos o probados',note:'Solo hace falta rellenar lo que cambie: marca el componente en «Componentes cambiados» y aparecerán sus campos. Lo que no cambia se da por igual que en el pre.',fields:[
   {k:'prestado',l:'Material prestado',t:'check',x:1,w:3,cls:'red'},
-  {k:'prest_txt',dep:['prestado','true'],l:'Material prestado a devolver o adquirir',t:'textarea',x:1,w:3},
+  {k:'prest_txt',dep:['prestado','true'],l:'Material prestado a devolver o adquirir: por ejemplo, Sillín Prologo Dimension 143 mm · 87 € PVP (Deporvillage / Decathlon)',t:'textarea',x:1,w:3},
   {k:'prest_estado',dep:['prestado','true'],l:'Estado del préstamo',t:'select',x:1,o:[['PEND','Pendiente'],['DEV','Devuelto'],['ABON','Abonado / comprado']]},
   {k:'prest_fecha',dep:['prestado','true'],l:'Fecha de devolución o pago',t:'date',x:1},
   {k:'p_sil_modelo',dep:['comp__SILLIN','true'],l:'Sillín nuevo: marca y modelo',t:'text',x:1,w:2},
@@ -891,7 +891,7 @@ document.addEventListener('change',e=>{const t=e.target;
 function prestFill(){if(!CUR||!CUR.v.prestado)return;const v=CUR.v,set=(k,d)=>{v[k]=d;document.querySelectorAll(`[data-k="${k}"]`).forEach(el=>{el.value=d;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});};
   const old=(v.prest_msg||'').trim();
   if(!old||(old.length<40&&!/prestad/i.test(old)))set('prest_msg',PREST_MSG);
-  if((v.prest_txt||'').trim().length<10)set('prest_txt',PREST_EJ);   // vacío o un apunte suelto (p. ej. «sillin») → ejemplo editable
+  if((v.prest_txt||'').trim()===PREST_EJ)set('prest_txt','');   // el ejemplo va en el título; el recuadro queda vacío
   if(!v.prest_estado)set('prest_estado','PEND');}
 function consSync(){const cb=document.querySelector('input[data-k="consent"]');if(!cb)return;document.querySelectorAll('input[name="cons-r"]').forEach(r=>r.checked=(r.value==='1')===cb.checked&&(cb.checked||cb.dataset.touched==='1'||true));}
 function renderForm(){setTimeout(consSync,0);setTimeout(prestFill,0);
