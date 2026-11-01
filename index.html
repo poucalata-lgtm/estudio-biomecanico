@@ -600,6 +600,9 @@ const SECTIONS=[
   {k:'prest_txt',dep:['prestado','true'],l:'Material prestado a devolver o adquirir: por ejemplo, Sillín Prologo Dimension 143 mm · 87 € PVP (Deporvillage / Decathlon)',t:'textarea',x:1,w:3},
   {k:'prest_estado',dep:['prestado','true'],l:'Estado del préstamo',t:'select',x:1,o:[['PEND','Pendiente'],['DEV','Devuelto'],['ABON','Abonado / comprado']]},
   {k:'prest_fecha',dep:['prestado','true'],l:'Fecha de devolución o pago',t:'date',x:1},
+  {k:'comprado',l:'Material comprado',t:'check',x:1,w:3},
+  {k:'compr_txt',dep:['comprado','true'],l:'Material comprado y precio aproximado: por ejemplo, Sillín Prologo Dimension 143 mm · 87 €',t:'textarea',x:1,w:3},
+  {k:'compr_total',dep:['comprado','true'],l:'Total del material comprado',t:'num',u:'€',x:1},
   {k:'p_sil_modelo',dep:['comp__SILLIN','true'],l:'Sillín nuevo: marca y modelo',t:'text',x:1,w:2},
   {k:'p_sil_anc',dep:['comp__SILLIN','true'],l:'Sillín nuevo: ancho',t:'num',u:'mm',x:1},
   {k:'p_sil_acolch',dep:['comp__SILLIN','true'],l:'Acolchado respecto al anterior',t:'select',x:1,o:[['BLANDO','Más blando'],['IGUAL','Igual'],['DURO','Más duro']]},
@@ -705,7 +708,7 @@ const SIMPLE_SECTIONS=[
   {k:'m_pot_ang_post',dep:['comp__POTENCIA','true'],l:'Potencia nueva: grados (si se conocen)',t:'num',u:'º',h:'Sin signo'},
   {k:'m_man_anc_post',dep:['comp__MANILLAR','true'],l:'Manillar nuevo: ancho',t:'num',u:'cm'},
   {k:'m_biela_post',dep:['comp__BIELAS','true'],l:'Bielas nuevas: longitud',t:'num',u:'mm'},
-  'prestado','prest_txt','prest_estado','prest_fecha',
+  'prestado','prest_txt','prest_estado','prest_fecha','comprado','compr_txt','compr_total',
   'p_sil_modelo','p_sil_anc','p_sil_acolch','p_sil_estr','p_sil_perfil','p_sil_long','p_sil_agujero','p_pot_modelo','p_man_desc','p_calas','p_tija_ret','p_tija_retmm','p_desc_SILLIN','p_desc_POTENCIA','p_desc_MANILLAR','p_desc_BIELAS','p_desc_CALAS','p_desc_PEDALES','p_desc_PLANTILLAS','p_desc_CUNAS','p_desc_SUPL','p_desc_ACOPLE','p_desc_TIJA','p_probados']},
  {id:'rec',title:'Recomendaciones',fields:[{k:'rec_txt',l:'Recomendaciones generales',t:'textarea',w:3,rows:7},'prest_msg',{k:'ej_txt',l:'Ejercicios propuestos (uno por línea, con *)',t:'textarea',w:3,rows:4}]},
 ]; SECTIONS.forEach(s=>(s.fields||[]).forEach(f=>FIELDS[f.k]=f));
