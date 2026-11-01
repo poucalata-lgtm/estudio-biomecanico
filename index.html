@@ -998,7 +998,7 @@ function modDone(c){const t=modText(c);return !!t&&!NOCHANGE.test(t);}
 /* ---------- imágenes ---------- */
 let imgTarget=null;
 // Parejas para el informe: [inicial, final] con el mismo pie sin "inicial/final" (90 con 90, 180 con 180). Primero 90, luego 180, luego el resto.
-const REP_MIDOFF=new Set();   // tomas intermedias ocultas en el informe (caso:grupo)
+const REP_MIDON=new Set();   // tomas intermedias incluidas en el informe (caso:grupo); por defecto, ninguna
 const midKey=g=>(CUR&&CUR.id)+':'+g;
 const repAnn=m=>m==='a'||(m!=='c'&&$('#opt-ann').checked);
 const repImg=(i,m)=>repAnn(m)||!i.base?i.src:i.base;
@@ -1010,7 +1010,7 @@ function imgPairs(){
   const rank=k=>/^90\b/.test(k)?0:/^180\b/.test(k)?1:2; rows.sort((a,b)=>rank(a.k)-rank(b.k));
   const out=[];rows.forEach(r=>{for(let j=0;j<Math.max(r.ini.length,r.fin.length);j++)out.push([r.ini[j]||null,r.fin[j]||null]);});
   const mids={};CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').forEach(i=>(mids[i.g||0]=mids[i.g||0]||[]).push(i));
-  Object.keys(mids).sort((a,b)=>a-b).filter(g=>!REP_MIDOFF.has(midKey(g))).forEach(g=>{const L=mids[g].sort((a,b)=>rank(key(a.cap))-rank(key(b.cap)));for(let j=0;j<L.length;j+=2)out.push([L[j],L[j+1]||null]);});
+  Object.keys(mids).sort((a,b)=>a-b).filter(g=>REP_MIDON.has(midKey(g))).forEach(g=>{const L=mids[g].sort((a,b)=>rank(key(a.cap))-rank(key(b.cap)));for(let j=0;j<L.length;j+=2)out.push([L[j],L[j+1]||null]);});
   return out;}
 function imgPhase(im){return im.ph||(/final|post/i.test(im.cap||'')?'fin':'ini');}
 // Toma a la que pertenece una imagen: inicial, final o cada toma intermedia (mid:1, mid:2…). Cada toma usa su propia grabación.
@@ -1098,11 +1098,12 @@ async function downloadPDF(){
 let REP_ANON=false;
 function renderRepTools2(){const b=$('#reptools2');if(!b||!CUR)return;
   const gs=[...new Set(CUR.imgs.filter(i=>i.src&&imgPhase(i)==='mid').map(i=>i.g||0))].sort((x,y)=>x-y);
-  b.innerHTML=`<label class="btn"><input type="checkbox" id="opt-ann2" ${$('#opt-ann').checked?'checked':''}> Mostrar ángulos y líneas en las imágenes</label><label class="btn"><input type="checkbox" id="opt-dual2" ${$('#opt-dual').checked?'checked':''}> Incluir pre-post sin y con marcadores</label>`+
-    gs.map(g=>`<label class="btn"><input type="checkbox" data-midg="${g}" ${REP_MIDOFF.has(midKey(g))?'':'checked'}> Incluir toma intermedia ${g}</label>`).join('');
+  b.innerHTML=`<button class="btn pri" id="b-pdf2">⬇ Descargar PDF</button>`+`<label class="btn"><input type="checkbox" id="opt-ann2" ${$('#opt-ann').checked?'checked':''}> Mostrar ángulos y líneas en las imágenes</label><label class="btn"><input type="checkbox" id="opt-dual2" ${$('#opt-dual').checked?'checked':''}> Incluir pre-post sin y con marcadores</label>`+
+    gs.map(g=>`<label class="btn"><input type="checkbox" data-midg="${g}" ${REP_MIDON.has(midKey(g))?'checked':''}> Incluir toma intermedia ${g}</label>`).join('');
+  $('#b-pdf2').onclick=()=>$('#b-pdf').click();
   $('#opt-ann2').onchange=e=>{$('#opt-ann').checked=e.target.checked;renderReport();};
   $('#opt-dual2').onchange=e=>{$('#opt-dual').checked=e.target.checked;renderReport();};
-  b.querySelectorAll('[data-midg]').forEach(x=>x.onchange=()=>{const k=midKey(x.dataset.midg);if(x.checked)REP_MIDOFF.delete(k);else REP_MIDOFF.add(k);renderReport();});}
+  b.querySelectorAll('[data-midg]').forEach(x=>x.onchange=()=>{const k=midKey(x.dataset.midg);if(x.checked)REP_MIDON.add(k);else REP_MIDON.delete(k);renderReport();});}
 function renderReport(){setTimeout(renderRepTools2,0);
   const v=CUR.v, S=SETTINGS;
   document.documentElement.style.setProperty('--rep',S.color||'#009FE3');
